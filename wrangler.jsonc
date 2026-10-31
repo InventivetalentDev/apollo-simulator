@@ -1,0 +1,15 @@
+// Hosting on Cloudflare: a Worker with no script that serves the Vite build in
+// dist/ as static files on apollosim.app. Deployed by .github/workflows/deploy.yml.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "apollosim",
+  "compatibility_date": "2026-10-31",
+  "assets": {
+    "directory": "./dist"
+  },
+  // Cloudflare creates the DNS record and certificate for this hostname.
+  "routes": [{ "pattern": "apollosim.app", "custom_domain": true }],
+  // Serve only on apollosim.app: no *.workers.dev address, no per-version preview URLs.
+  "workers_dev": false,
+  "preview_urls": false
+}

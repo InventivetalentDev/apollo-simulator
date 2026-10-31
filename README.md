@@ -34,6 +34,14 @@ npm run build                 # static site in dist/, deployable to any static h
 npm run assemble -- Comanche055 --compare   # assemble from the command line, compare with the 1969 listing
 ```
 
+## Deploying
+
+Every push to `main` runs the tests, builds the site and deploys it to
+<https://apollosim.app> with GitHub Actions (`.github/workflows/deploy.yml`).
+The site is a Cloudflare Worker that serves the static files in `dist/`
+(`wrangler.jsonc`). The workflow needs two repository secrets:
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+
 ## Trying the DSKY
 
 Click the keys or type on your keyboard: digits, `V` (VERB), `N` (NOUN),
