@@ -21,10 +21,10 @@
         </div>
         <div class="program-switch" role="radiogroup" aria-label="Spacecraft">
           <button type="button" role="radio" data-program="Luminary099" aria-checked="true">
-            <b>LM</b><span>Luminary 099</span>
+            <b data-abbr>LM</b><span>Luminary 099</span>
           </button>
           <button type="button" role="radio" data-program="Comanche055" aria-checked="false">
-            <b>CM</b><span>Comanche 055</span>
+            <b data-abbr>CM</b><span>Comanche 055</span>
           </button>
         </div>
         <button type="button" id="land" class="ctl land" title="Restart the computer in Apollo 11's descent orbit and fly the powered descent">Land on the Moon</button>
@@ -75,14 +75,20 @@
                 <span class="sub" id="cpu-location">—</span>
               </div>
               <div class="stat"><span class="k">Clock</span><span class="v mono" id="cpu-time">000:00:00</span></div>
-              <div class="stat"><span class="k">Z</span><span class="v mono" id="reg-z">—</span></div>
-              <div class="stat"><span class="k">A</span><span class="v mono" id="reg-a">—</span></div>
-              <div class="stat"><span class="k">L</span><span class="v mono" id="reg-l">—</span></div>
-              <div class="stat"><span class="k">Q</span><span class="v mono" id="reg-q">—</span></div>
-              <div class="stat"><span class="k">BB</span><span class="v mono" id="reg-bb">—</span></div>
+              <div class="stat"><span class="k" data-abbr>Z</span><span class="v mono" id="reg-z">—</span></div>
+              <div class="stat"><span class="k" data-abbr>A</span><span class="v mono" id="reg-a">—</span></div>
+              <div class="stat"><span class="k" data-abbr>L</span><span class="v mono" id="reg-l">—</span></div>
+              <div class="stat"><span class="k" data-abbr>Q</span><span class="v mono" id="reg-q">—</span></div>
+              <div class="stat"><span class="k" data-abbr>BB</span><span class="v mono" id="reg-bb">—</span></div>
             </div>
             <div class="cpu-row">
-              <div class="chips" id="cpu-chips"></div>
+              <div class="chips" id="cpu-chips">
+                <span class="chip rate"><b id="cpu-rate">—</b> <span data-abbr>instr/s</span></span>
+                <span class="status-lamp" id="lamp-inhint" data-abbr>INHINT</span>
+                <span class="status-lamp" id="lamp-restarts" title="Restarts since power-up. Each one also lights the DSKY’s RESTART lamp.">Restarts <b id="cpu-restarts">0</b></span>
+                <span class="status-lamp" id="lamp-paused" title="The computer is paused. Run starts it again.">Paused</span>
+                <span class="status-lamp" id="lamp-speed" title="Simulation speed: lit when it is not real time.">Speed <b id="cpu-speed">1×</b></span>
+              </div>
               <div class="rupts" id="cpu-rupts" aria-label="Interrupts per second"></div>
             </div>
           </section>

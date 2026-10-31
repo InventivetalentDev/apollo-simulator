@@ -176,6 +176,16 @@ test('Luminary099 flies the powered descent from the setup to the surface, with 
     const step = checklist.current(agc, lm)!;
     if (step.number !== steps.at(-1)) {
       steps.push(step.number);
+      // Leave V99 waiting a few seconds, through P63's once-a-second rewrites of the
+      // display: the step must not waver, even at every 10 ms.
+      if (step.key === 'PRO' && step.title.startsWith('V99')) {
+        const seen = new Set<string>();
+        for (let i = 0; i < 400; i++) {
+          run(0.01);
+          seen.add(checklist.current(agc, lm)!.title);
+        }
+        assert.deepEqual([...seen], [step.title], 'the V99 step holds while it waits');
+      }
       if (step.key) keys(step.key);
       else if (step.keys && step.number > 1) keys(step.keys);
       else if (step.stopEngine) lm.engine.armed = false;

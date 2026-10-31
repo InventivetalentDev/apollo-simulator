@@ -35,6 +35,14 @@ export const DESCENT_STEPS = 15;
 const PROBE_LENGTH = 1.7;
 /** LRINH, flagword 11 bit 8: the crew has permitted landing radar updates (VERB 57). */
 const LRINH_BIT = 0o200;
+/**
+ * While P63 waits for PRO on V99, CLOCPLAY (BURN_BABY_BURN) rewrites the
+ * display once a second: for about 0.1 s the DSKY shows V06 with the same
+ * noun, and the flashing stops for a moment.  A rewrite counts as V99 still
+ * asking if V99 flashed within this many seconds of computer time, which is
+ * more than one browser frame at the highest speed.
+ */
+const V99_REWRITE = 4;
 
 const clock = (s: number) => {
   const whole = Math.max(0, Math.floor(s));
@@ -69,6 +77,9 @@ export class DescentChecklist {
   private accepted = false;
   private enabled = false;
   private ignitionAt = 0;
+  /** Computer time V99 last flashed, and its noun. */
+  private v99At = -Infinity;
+  private v99Noun = '';
   /** The landing radar has had data since ignition. */
   private radarSeen = false;
   private last: DescentStep;
@@ -91,8 +102,8 @@ export class DescentChecklist {
   /** The step the crew is on, or null when the LM is not in orbit. */
   current(agc: AGC, lm: LunarModule): DescentStep | null {
     if (!lm.orbiting) return null;
-    const d = readDsky(agc);
     const now = (agc.mem[REG.TIME2] * 2 ** 14 + agc.mem[REG.TIME1]) / 100;
+    const d = this.throughRewrites(readDsky(agc), now);
     const tig = this.tigAddress >= 0 ? (agc.mem[this.tigAddress] * 2 ** 14 + agc.mem[this.tigAddress + 1]) / 100 : 0;
     // Each answer moves the display on; the step after it starts once the question is gone.
     if (d.prog === '63') this.startedP63 = true;
@@ -112,6 +123,19 @@ export class DescentChecklist {
     // Between displays the DSKY is briefly blank: keep showing the step just answered.
     if (step) this.last = step;
     return this.last;
+  }
+
+  /** The DSKY as the crew reads it: V99 goes on asking through P63's once-a-second rewrites of it. */
+  private throughRewrites(d: DskyState, now: number): DskyState {
+    if (d.vnFlashing && d.verb === '99') {
+      this.v99At = now;
+      this.v99Noun = d.noun;
+      return d;
+    }
+    const rewrite = (d.verb === '06' || d.verb === '99') && d.noun === this.v99Noun && now - this.v99At < V99_REWRITE;
+    if (rewrite && !this.ignitionAt) return { ...d, verb: '99', vnFlashing: true };
+    this.v99At = -Infinity;
+    return d;
   }
 
   private match(d: DskyState, lm: LunarModule, now: number, tig: number, radarUsed: boolean): DescentStep | null {

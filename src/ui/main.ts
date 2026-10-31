@@ -10,6 +10,7 @@ import { DskyView, KEYBOARD_MAP } from './dsky-view.ts';
 import { LmPanel } from './lm-panel.ts';
 import type { LmView } from './lm-view.ts';
 import { Machine } from './machine.ts';
+import { abbr, explain, explainIn, setVerbsAndNouns } from './glossary.ts';
 import { formatAddress, ropeIndexOf, SourceView, type SourceLinker } from './source-view.ts';
 
 interface LoadedProgram {
@@ -46,7 +47,15 @@ const els = {
     q: $('#reg-q'),
     bb: $('#reg-bb'),
   },
-  chips: $('#cpu-chips'),
+  rate: $('#cpu-rate'),
+  lamps: {
+    inhint: $('#lamp-inhint'),
+    restarts: $('#lamp-restarts'),
+    paused: $('#lamp-paused'),
+    speed: $('#lamp-speed'),
+  },
+  restarts: $('#cpu-restarts'),
+  speedShown: $('#cpu-speed'),
   rupts: $('#cpu-rupts'),
   commands: $('#command-list'),
   leftScroll: $('.left-scroll'),
@@ -95,8 +104,8 @@ function renderCommands(vehicle: 'LM' | 'CM'): void {
   els.commands.innerHTML = COMMANDS.map((c, i) =>
     c.vehicle && c.vehicle !== vehicle
       ? ''
-      : `<li><button type="button" class="cmd${c.keys.length > 24 ? ' long' : ''}" data-cmd="${i}"><span class="title">${c.title}</span>` +
-        `<span class="keys">${displayKeys(c.keys)}</span><span class="detail">${c.detail}</span></button></li>`,
+      : `<li><button type="button" class="cmd${c.keys.length > 24 ? ' long' : ''}" data-cmd="${i}"><span class="title">${explain(c.title)}</span>` +
+        `<span class="keys">${explain(displayKeys(c.keys))}</span><span class="detail">${explain(c.detail)}</span></button></li>`,
   ).join('');
 }
 els.commands.addEventListener('click', (e) => {
@@ -313,6 +322,10 @@ async function loadProgram(id: string): Promise<void> {
   heatBase = new Map();
   lastLocation = ''; // both programs share file names, so the link must be rebuilt
   const { response } = loaded;
+  // Hover text for verb and noun numbers comes from this program's own lists.
+  const lists = response.result.files.findIndex((f) => f.name === 'ASSEMBLY_AND_OPERATION_INFORMATION.agc');
+  setVerbsAndNouns(response.texts[lists], info.id.replace(/(\D)(\d)/, '$1 $2'));
+  renderCommands(info.vehicle);
   source.load(
     response.result,
     response.texts,
@@ -384,6 +397,15 @@ function ropeLocation(ropeIndex: number): string {
 }
 
 const oct = (v: number, w = 5) => v.toString(8).padStart(w, '0');
+/** Interrupts whose rates the computer panel shows: T3, T4, KEYRUPT1, T6, T5 and DOWNRUPT. */
+const SHOWN_RUPTS = [3, 4, 5, 1, 2, 8];
+/**
+ * The INHINT lamp stays lit this long after the computer was last seen with
+ * interrupts inhibited, ms: the software inhibits them for microseconds at a
+ * time, too briefly to see.
+ */
+const LAMP_HOLD_MS = 500;
+let inhintSeen = -Infinity;
 let lastPanelUpdate = 0;
 let lastLocation = '';
 let heatBase = new Map<number, number>();
@@ -431,21 +453,25 @@ function refreshPanels(force = false): void {
   els.regs.q.textContent = oct(overflowCorrected(agc.mem[REG.Q]));
   els.regs.bb.textContent = oct(agc.mem[REG.BB]);
 
-  const chips: string[] = [];
-  chips.push(`<span class="chip ok">${(machine.instructionRate / 1000).toFixed(1)}k instr/s</span>`);
-  chips.push(agc.allowInterrupt ? '<span class="chip">interrupts on</span>' : '<span class="chip warn">INHINT</span>');
-  if (agc.extraCode) chips.push('<span class="chip">EXTEND</span>');
-  chips.push(agc.restarts ? `<span class="chip warn">${agc.restarts} restart${agc.restarts > 1 ? 's' : ''}</span>` : '<span class="chip">no restarts</span>');
-  if (!machine.running) chips.push('<span class="chip warn">paused</span>');
-  if (machine.speed !== 1) chips.push(`<span class="chip warn">${machine.speed}× speed</span>`);
-  els.chips.innerHTML = chips.join('');
-  const shown = [3, 4, 5, 1, 2, 8];
-  els.rupts.innerHTML = shown
-    .map((i) => {
-      const rate = machine!.interruptRates[i];
-      return `<span class="rupt${rate > 0 ? ' active' : ''}" title="${INTERRUPT_NAMES[i]} per second"><b>${rate >= 10 ? Math.round(rate) : rate.toFixed(1)}</b>${INTERRUPT_NAMES[i]}</span>`;
-    })
-    .join('');
+  // Fixed lamps that light up, so nothing appears, vanishes or shifts the row.
+  els.rate.textContent = `${(machine.instructionRate / 1000).toFixed(1)}k`;
+  els.lamps.inhint.classList.toggle('on', now - inhintSeen < LAMP_HOLD_MS);
+  els.restarts.textContent = String(agc.restarts);
+  els.lamps.restarts.classList.toggle('on', agc.restarts > 0);
+  els.lamps.paused.classList.toggle('on', !machine.running);
+  els.speedShown.textContent = `${machine.speed}×`;
+  els.lamps.speed.classList.toggle('on', machine.speed !== 1);
+  // Built once and then only updated, so their hover text stays put.
+  if (!els.rupts.childElementCount) {
+    els.rupts.innerHTML = SHOWN_RUPTS.map((i) => `<span class="rupt"><b>0.0</b>${abbr(INTERRUPT_NAMES[i])}</span>`).join('');
+  }
+  SHOWN_RUPTS.forEach((i, k) => {
+    const rate = machine!.interruptRates[i];
+    const el = els.rupts.children[k] as HTMLElement;
+    el.classList.toggle('active', rate > 0);
+    // Three characters at most ("9.9", "10", "100"), so the row never shifts.
+    el.firstElementChild!.textContent = rate < 9.95 ? rate.toFixed(1) : String(Math.round(rate));
+  });
 
   // Source listing: the executing line and lines that ran since the last refresh.
   const mode = els.follow.value;
@@ -470,6 +496,7 @@ function refreshPanels(force = false): void {
 function frame(now: number): void {
   if (machine) {
     machine.frame(now);
+    if (!machine.agc.allowInterrupt) inhintSeen = now;
     dsky.update(readDsky(machine.agc));
     craft.update(now);
     view?.update(craft.litJets);
@@ -477,6 +504,11 @@ function frame(now: number): void {
   }
   requestAnimationFrame(frame);
 }
+
+// Short forms in the page's fixed text: their meaning shows on hover.
+for (const el of document.querySelectorAll<HTMLElement>('[data-abbr]')) el.innerHTML = abbr(el.textContent!.trim());
+explainIn($('.about'));
+explainIn($('.commands .hint'));
 
 let initial = 'Luminary099';
 try {

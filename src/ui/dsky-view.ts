@@ -2,6 +2,7 @@
 // display, and the 19-key keyboard.
 
 import type { DskyKey, DskyLamps, DskyState } from '../agc/dsky.ts';
+import { describe, DSKY_TITLES, escapeHtml } from './glossary.ts';
 
 const SEGMENTS: Record<string, string> = {
   a: '6.5,4 9,1.5 23,1.5 25.5,4 23,6.5 9,6.5',
@@ -49,6 +50,12 @@ interface LampDef {
   lmOnly?: boolean;
 }
 // The two columns of the caution and status panel, top to bottom.
+/** A key's hover text: what it does, and its key on the computer keyboard. */
+const keyTitle = (k: { key: string; hint: string }) => {
+  const what = describe(k.key) ?? DSKY_TITLES[k.key];
+  return what ? ` title="${escapeHtml(`${what} Keyboard: ${k.hint}.`)}"` : '';
+};
+
 const LAMP_COLUMNS: (LampDef | null)[][] = [
   [
     { id: 'uplinkActy', label: 'UPLINK ACTY', color: 'white' },
@@ -224,7 +231,11 @@ export class DskyView {
     const lamps = LAMP_COLUMNS.map(
       (col) =>
         `<div class="lamp-col">${col
-          .map((l) => (l ? `<div class="lamp ${l.color}" data-lamp="${l.id}"><span>${l.label.replace(' ', '<br>')}</span></div>` : '<div class="lamp"></div>'))
+          .map((l) =>
+            l
+              ? `<div class="lamp ${l.color}" data-lamp="${l.id}" title="${escapeHtml(DSKY_TITLES[l.label] ?? '')}"><span>${l.label.replace(' ', '<br>')}</span></div>`
+              : '<div class="lamp"></div>',
+          )
           .join('')}</div>`,
     ).join('');
     const digits = (field: string, n: number) => `<div class="digits" data-field="${field}">${digitSvg().repeat(n)}</div>`;
@@ -232,18 +243,18 @@ export class DskyView {
       `<div class="register"><div class="digits sign-cell" data-field="r${n}s">${signSvg()}</div>${digits(`r${n}`, 5)}</div>`;
     const keys = KEYS.map(
       (k) =>
-        `<button type="button" class="key key-${k.area}" style="grid-area:${k.area}" data-key="${k.key}" aria-label="${k.label.replace('<br>', ' ')} (keyboard: ${k.hint})"><span>${k.label}</span></button>`,
+        `<button type="button" class="key key-${k.area}" style="grid-area:${k.area}" data-key="${k.key}" aria-label="${k.label.replace('<br>', ' ')} (keyboard: ${k.hint})"${keyTitle(k)}><span>${k.label}</span></button>`,
     ).join('');
     return `
       <div class="dsky-upper">
         <div class="lamp-panel" aria-label="Caution and status lamps">${lamps}</div>
         <div class="el-panel" aria-label="Display">
           <div class="el-grid">
-            <div class="el-label comp-acty">COMP<br>ACTY</div>
-            <div class="el-field"><div class="el-label">PROG</div>${digits('prog', 2)}</div>
+            <div class="el-label comp-acty" title="${escapeHtml(DSKY_TITLES['COMP ACTY'])}">COMP<br>ACTY</div>
+            <div class="el-field"><div class="el-label" title="${escapeHtml(DSKY_TITLES['PROG display'])}">PROG</div>${digits('prog', 2)}</div>
             <div class="vn">
-              <div class="el-field"><div class="el-label">VERB</div>${digits('verb', 2)}</div>
-              <div class="el-field"><div class="el-label">NOUN</div>${digits('noun', 2)}</div>
+              <div class="el-field"><div class="el-label" title="${escapeHtml(DSKY_TITLES['VERB display'])}">VERB</div>${digits('verb', 2)}</div>
+              <div class="el-field"><div class="el-label" title="${escapeHtml(DSKY_TITLES['NOUN display'])}">NOUN</div>${digits('noun', 2)}</div>
             </div>
           </div>
           <div class="el-bar"></div>${register(1)}

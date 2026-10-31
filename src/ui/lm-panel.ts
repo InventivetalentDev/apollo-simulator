@@ -11,6 +11,7 @@ import { JETS, type LunarModule, type ModeControl } from '../sim/lm.ts';
 import { displayKeys } from './commands.ts';
 import { DESCENT_STEPS, DescentChecklist, type DescentStep } from './descent-checklist.ts';
 import { Fdai } from './fdai.ts';
+import { abbr, explain } from './glossary.ts';
 
 /** Stick deflection for a held key or button; Shift gives full deflection. */
 const STICK_NORMAL = 0.5;
@@ -18,6 +19,12 @@ const STICK_NORMAL = 0.5;
 const JET_GLOW_MS = 140;
 /** The descent engine's rated thrust, 10,500 lbf: 100% on the LM's thrust meter. */
 const DPS_RATED = 10500 * 4.4482216;
+
+/**
+ * A step that asks nothing of the crew stays on screen at least this long, ms,
+ * so it can be read even when the next one follows within moments.
+ */
+const STEP_MIN_MS = 1200;
 
 /** Simulation speed while the checklist fast-forwards through a wait. */
 const FAST_FORWARD = 20;
@@ -77,7 +84,7 @@ function jetDiagram(): string {
   const base = [
     '<polygon class="hull" points="-30,-40 30,-40 44,-22 44,28 30,40 -30,40 -44,28 -44,-22" />',
     '<rect class="hatch" x="-10" y="-46" width="20" height="8" rx="2" />',
-    '<text class="axis" x="0" y="-86" text-anchor="middle">FWD +Z</text>',
+    '<text class="axis" x="0" y="-86" text-anchor="middle"><title>Forward: the +Z axis, out of the front hatch</title>FWD +Z</text>',
     '<text class="axis" x="96" y="4" text-anchor="end">+Y</text>',
   ];
   const quads: string[] = [];
@@ -140,7 +147,10 @@ export class LmPanel {
   private imodes33 = -1;
   private addressOf: (name: string) => number = () => -1;
   private checklist = new DescentChecklist();
+  /** The step on screen, and the step the checklist is at (they differ while a step is held). */
   private step: DescentStep | null = null;
+  private current: DescentStep | null = null;
+  private stepShownAt = 0;
   private cued: DskyKey | null = null;
   /** The speed to go back to after fast-forward, or 0 when not fast-forwarding. */
   private resumeSpeed = 0;
@@ -150,6 +160,8 @@ export class LmPanel {
   private readonly glowUntil = new Float64Array(16);
   private readonly lastJetSeconds = new Float64Array(16);
   private readonly fdai: Fdai;
+  /** The HTML last written to each checklist element. */
+  private readonly shown = new WeakMap<HTMLElement, string>();
   private readonly els: {
     status: HTMLElement;
     gimbals: HTMLElement[];
@@ -193,11 +205,11 @@ export class LmPanel {
         ${jetDiagram()}
         <div class="craft-read">
           <div class="readout">
-            <span class="k">IMU gimbals <small>deg</small></span>
+            <span class="k">${explain('IMU gimbals')} <small>deg</small></span>
             <div class="trio">
-              <span><b>OG</b><i class="mono" data-g="0">—</i></span>
-              <span><b>IG</b><i class="mono" data-g="1">—</i></span>
-              <span><b>MG</b><i class="mono" data-g="2">—</i></span>
+              <span><b>${abbr('OG')}</b><i class="mono" data-g="0">—</i></span>
+              <span><b>${abbr('IG')}</b><i class="mono" data-g="1">—</i></span>
+              <span><b>${abbr('MG')}</b><i class="mono" data-g="2">—</i></span>
             </div>
           </div>
           <div class="readout">
@@ -210,9 +222,9 @@ export class LmPanel {
           </div>
           <div class="switches">
             <div class="seg" role="radiogroup" aria-label="PGNS mode control">
-              ${MODES.map((m) => `<button type="button" role="radio" data-mode="${m.mode}" aria-checked="false">${m.label}</button>`).join('')}
+              ${MODES.map((m) => `<button type="button" role="radio" data-mode="${m.mode}" aria-checked="false">${abbr(m.label)}</button>`).join('')}
             </div>
-            <label class="toggle"><input type="checkbox" id="craft-imu" checked /> IMU operate</label>
+            <label class="toggle"><input type="checkbox" id="craft-imu" checked /> ${explain('IMU operate')}</label>
           </div>
         </div>
       </div>
@@ -220,8 +232,8 @@ export class LmPanel {
         <span class="k">Descent <small>true values; the DSKY shows the computer's</small></span>
         <div class="trio five">
           <span><b>Altitude m</b><i class="mono" data-d="0">—</i></span>
-          <span><b>Vert m/s</b><i class="mono" data-d="1">—</i></span>
-          <span><b>Horiz m/s</b><i class="mono" data-d="2">—</i></span>
+          <span><b>${abbr('Vert')} m/s</b><i class="mono" data-d="1">—</i></span>
+          <span><b>${abbr('Horiz')} m/s</b><i class="mono" data-d="2">—</i></span>
           <span><b>Thrust %</b><i class="mono" data-d="3">—</i></span>
           <span><b>Fuel kg</b><i class="mono" data-d="4">—</i></span>
         </div>
@@ -251,7 +263,7 @@ export class LmPanel {
       <canvas class="fdai-ball" role="img"
         aria-label="Attitude ball (FDAI), with the computer's attitude-error needles and the rate needles"
         title="The ball holds still in space while the LM turns around it: its centre shows where the front of the LM points. The needles across the ball come from the original software and point the way to turn to reach the attitude it wants. The pointers outside show how fast the LM turns."></canvas>
-      <p class="fdai-key">Centre: where the LM points. Needles: the way to turn.</p>`;
+      <p class="fdai-key">${explain('Centre: where the LM points. Needles: the way to turn.')}</p>`;
     this.fdai = new Fdai(fdaiHost.querySelector('.fdai-ball')!);
 
     host.addEventListener('click', (e) => {
@@ -322,16 +334,18 @@ export class LmPanel {
       this.jetEls[j]?.classList.toggle('on', this.glowUntil[j] > now);
       if (this.glowUntil[j] > now) this.litJets |= 1 << j;
     }
-    this.els.status.textContent = this.status();
+    const status = explain(this.status());
+    if (this.shown.get(this.els.status) !== status) this.els.status.innerHTML = status;
+    this.shown.set(this.els.status, status);
     this.els.descent.hidden = !lm.orbiting;
     if (lm.orbiting) this.updateDescent(lm);
-    this.updateChecklist(lm, this.agc);
+    this.updateChecklist(lm, this.agc, now);
   }
 
   /** Start the descent checklist over: after a setup, or after a restart that cleared memory (`loaded` false). */
   restartChecklist(loaded = true): void {
     this.checklist = new DescentChecklist(this.addressOf, loaded);
-    this.step = null;
+    this.step = this.current = null;
     this.fastForward(false);
     this.cue(null);
   }
@@ -364,28 +378,46 @@ export class LmPanel {
     this.checklistHost.cue(key);
   }
 
-  private updateChecklist(lm: LunarModule, agc: AGC): void {
-    const step = this.checklist.current(agc, lm);
+  private updateChecklist(lm: LunarModule, agc: AGC, now: number): void {
+    const next = this.checklist.current(agc, lm);
     // A new step ends fast-forward, so every question and event comes at the chosen speed.
-    if (step?.number !== this.step?.number || step?.key !== this.step?.key) this.fastForward(false);
+    if (next?.number !== this.current?.number || next?.key !== this.current?.key) this.fastForward(false);
+    this.current = next;
+    // Keep a step that asked nothing on screen a little longer if the next one also asks nothing.
+    let step = next;
+    if (next?.title !== this.step?.title) {
+      const passive = (s: DescentStep) => !s.key && !s.keys && !s.stopEngine;
+      if (next && this.step && passive(next) && passive(this.step) && now - this.stepShownAt < STEP_MIN_MS) step = this.step;
+      else {
+        this.stepShownAt = now;
+        this.fastForward(false);
+      }
+    }
     this.step = step;
     this.cue(step?.key ?? null);
     this.els.checklist.hidden = !step;
     if (!step) return;
+    // Rewrite only on change, so hover text stays up.
     const set = (el: HTMLElement, html: string) => {
-      if (el.innerHTML !== html) el.innerHTML = html;
+      if (this.shown.get(el) === html) return;
+      el.innerHTML = html;
+      this.shown.set(el, html);
     };
     const s = this.els.step;
     set(s.count, `Step ${step.number} of ${DESCENT_STEPS}`);
-    set(s.title, step.title);
-    set(s.detail, step.detail);
+    set(s.title, explain(step.title));
+    set(s.detail, explain(step.detail));
     set(s.timer, step.timer ?? '');
     s.timer.hidden = !step.timer;
     const canSpeedUp = step.wait && (this.resumeSpeed > 0 || this.checklistHost.speed() < FAST_FORWARD);
-    const kbd = (keys: string) => displayKeys(keys).split(' ').map((k) => `<kbd>${k}</kbd>`).join(' ');
+    const kbd = (keys: string) => displayKeys(keys).split(' ').map((k) => `<kbd>${abbr(k)}</kbd>`).join(' ');
     set(
       s.action,
-      step.key ? `Press the lit <kbd>${step.key}</kbd> key on the DSKY, or` : step.keys ? `Key ${kbd(step.keys)} on the DSKY, or` : '',
+      step.key
+        ? `Press the lit <kbd>${abbr(step.key)}</kbd> key on the ${abbr('DSKY')}, or`
+        : step.keys
+          ? `Key ${kbd(step.keys)} on the ${abbr('DSKY')}, or`
+          : '',
     );
     set(this.els.do, step.key ? 'Press it for me' : (step.button ?? `Fast-forward ${FAST_FORWARD}×`));
     this.els.do.setAttribute('aria-pressed', String(this.resumeSpeed > 0));

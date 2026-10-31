@@ -241,6 +241,17 @@ kbd {
   color: var(--muted);
 }
 
+/* Short forms: a dotted underline, and their meaning on hover */
+abbr[title] {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+  text-underline-offset: 0.18em;
+  cursor: help;
+}
+.status-lamp[title] {
+  cursor: help;
+}
+
 /* ---- DSKY */
 .dsky {
   background: linear-gradient(160deg, #6a6f73, var(--dsky-case) 40%, #4c5054);
@@ -611,12 +622,46 @@ kbd {
   font: 500 12px var(--font-mono);
   color: var(--muted);
 }
-.chip.warn {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.chip.ok {
+.chip.rate {
   color: var(--text);
+}
+#cpu-rate {
+  display: inline-block;
+  min-width: 6ch;
+  text-align: right;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* Status lamps: always in place, lit while their state holds */
+.status-lamp {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(141 152 161 / 0.55);
+  transition:
+    color 0.2s,
+    background-color 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.status-lamp b {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.status-lamp.on {
+  color: #1a1206;
+  background: var(--lamp-amber);
+  border-color: var(--lamp-amber);
+  box-shadow: 0 0 10px rgb(255 194 74 / 0.45);
+  transition: none;
+}
+#lamp-speed b {
+  display: inline-block;
+  min-width: 4ch;
+  text-align: right;
 }
 .rupt {
   display: flex;
@@ -1159,7 +1204,8 @@ kbd {
     animation-duration: 3s;
   }
   .key,
-  .lamp {
+  .lamp,
+  .status-lamp {
     transition: none;
   }
   .key.cue::after {
