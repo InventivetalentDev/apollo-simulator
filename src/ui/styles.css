@@ -179,8 +179,43 @@ kbd {
   flex-direction: column;
   gap: 16px;
 }
+/* The DSKY stays put; the panels under it scroll on their own. */
 .left {
+  overflow: hidden;
+}
+#dsky-host {
+  flex: none;
+}
+.left-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-radius: 10px;
+}
+/* On shorter windows the DSKY shrinks, so the panels under it keep about 200 px. */
+@media (min-width: 901px) and (max-height: 859px) {
+  #dsky-host {
+    zoom: 0.88;
+  }
+}
+@media (min-width: 901px) and (max-height: 779px) {
+  #dsky-host {
+    zoom: 0.8;
+  }
+}
+/* Too short a window for both: the whole column scrolls, as one. */
+@media (min-width: 901px) and (max-height: 719px) {
+  .left {
+    overflow-y: auto;
+  }
+  .left-scroll {
+    flex: none;
+    overflow: visible;
+  }
 }
 .panel {
   background: var(--panel);
@@ -1101,8 +1136,12 @@ kbd {
     grid-template-columns: minmax(0, 1fr);
     padding: 16px;
   }
-  .left {
+  .left,
+  .left-scroll {
     overflow: visible;
+  }
+  .left-scroll {
+    flex: none;
   }
   .view3d {
     height: clamp(220px, 56vw, 420px);

@@ -48,6 +48,7 @@ const els = {
   chips: $('#cpu-chips'),
   rupts: $('#cpu-rupts'),
   commands: $('#command-list'),
+  leftScroll: $('.left-scroll'),
 };
 
 let machine: Machine | null = null;
@@ -111,11 +112,12 @@ els.commands.addEventListener('click', (e) => {
     craft.attach(machine.lm, machine.agc, (name) => symbols.find((s) => s.name === name)?.value ?? -1);
   }
   typeKeys(parseKeys(command.keys));
-  // On a narrow screen the DSKY is above the list: bring it back into view.
-  if (window.matchMedia('(max-width: 900px)').matches) {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    dsky.el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-  }
+  const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  // When the list has scrolled the DSKY out of sight (narrow or short screens), bring it back.
+  const shown = dsky.el.getBoundingClientRect();
+  if (shown.top < 0 || shown.bottom > window.innerHeight) dsky.el.scrollIntoView({ behavior, block: 'start' });
+  // After a setup, show the LM panel's checklist at the top of the panels under the DSKY.
+  if (command.setup) els.leftScroll.scrollTo({ top: 0, behavior });
 });
 
 // ---- Keyboard
