@@ -637,12 +637,22 @@ kbd {
 }
 
 /* ---- 3D view */
-.view3d {
-  position: relative;
+/* The 3D view and the attitude ball, side by side */
+.views {
   /* Gives way first when the window is short, so the right column fits without scrolling the page. */
   flex: 0 1 auto;
   height: clamp(200px, 32vh, 420px);
   min-height: 160px;
+  display: flex;
+  gap: 16px;
+}
+.views:not(:has(> :not([hidden]))) {
+  display: none;
+}
+.view3d {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
 }
 .view3d canvas {
@@ -666,6 +676,31 @@ kbd {
   color: var(--muted);
   pointer-events: none;
   text-shadow: 0 1px 3px rgb(0 0 0 / 0.85);
+}
+
+/* The attitude ball's panel: about as wide as the row is tall, so the ball fills it */
+.fdai {
+  flex: none;
+  width: clamp(220px, 26vh, 300px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
+.fdai[hidden] {
+  display: none;
+}
+.fdai-ball {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  display: block;
+}
+.fdai-key {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
 }
 
 /* ---- Source listing */
@@ -1118,23 +1153,6 @@ kbd {
   color: var(--muted);
   font-size: 13px;
 }
-/* The attitude ball (FDAI), drawn on a square canvas */
-.fdai {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-.fdai-ball {
-  display: block;
-  width: min(100%, 248px);
-  aspect-ratio: 1;
-}
-.fdai figcaption {
-  font-size: 12px;
-  line-height: 1.4;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .spinner {
@@ -1173,7 +1191,7 @@ kbd {
   .left-scroll {
     flex: none;
   }
-  .view3d {
+  .views {
     height: clamp(220px, 56vw, 420px);
   }
   .source {
@@ -1182,6 +1200,20 @@ kbd {
   }
   .topbar {
     padding: 12px 16px;
+  }
+}
+@media (max-width: 640px) {
+  .views {
+    height: auto;
+    flex-direction: column;
+  }
+  .view3d {
+    flex: none;
+    height: clamp(220px, 56vw, 420px);
+  }
+  .fdai {
+    width: auto;
+    height: 300px;
   }
 }
 @media (max-width: 460px) {

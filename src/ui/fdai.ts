@@ -57,7 +57,8 @@ const FONT = "'IBM Plex Mono', ui-monospace, Menlo, monospace";
 
 export class Fdai {
   private readonly ctx: CanvasRenderingContext2D;
-  private size = 0;
+  private width = 0;
+  private height = 0;
   private scale = 1;
   private image: ImageData | null = null;
 
@@ -71,43 +72,45 @@ export class Fdai {
    * needles for `rates` (rad/s about X, Y, Z).
    */
   draw(m: Mat3, errors: Vec3, rates: Vec3): void {
-    const css = this.canvas.clientWidth;
-    if (!css) return;
+    const { clientWidth: w, clientHeight: h } = this.canvas;
+    if (!w || !h) return;
     const scale = Math.min(devicePixelRatio || 1, 2);
-    if (css !== this.size || scale !== this.scale) {
-      this.size = css;
-      this.scale = scale;
-      this.canvas.width = this.canvas.height = Math.round(css * scale);
+    if (w !== this.width || h !== this.height || scale !== this.scale) {
+      [this.width, this.height, this.scale] = [w, h, scale];
+      this.canvas.width = Math.round(w * scale);
+      this.canvas.height = Math.round(h * scale);
       this.image = null;
     }
+    // Everything is drawn in the largest square that fits, centred.
+    const size = Math.min(w, h);
+    const [ox, oy] = [(w - size) / 2, (h - size) / 2];
     const ctx = this.ctx;
-    const c = css / 2;
-    const r = css * 0.3;
+    const c = size / 2;
+    const r = size * 0.3;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.paintBall(m, c, r);
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    this.paintBall(m, (ox + c) * scale, (oy + c) * scale, r * scale);
+    ctx.setTransform(scale, 0, 0, scale, ox * scale, oy * scale);
     this.drawGrid(m, c, r);
     this.drawCase(m, c, r);
     this.drawNeedles(errors, rates, c, r);
   }
 
-  /** The two halves, shaded so the ball looks round. */
-  private paintBall(m: Mat3, c: number, r: number): void {
-    const s = this.scale;
-    const rp = r * s;
-    const n = Math.ceil(2 * rp) + 2;
+  /** The two halves, shaded so the ball looks round; centre and radius in device pixels. */
+  private paintBall(m: Mat3, cx: number, cy: number, rp: number): void {
+    const n = Math.ceil(2 * rp) + 4;
     if (!this.image || this.image.width !== n) this.image = this.ctx.createImageData(n, n);
     const data = this.image.data;
-    const x0 = Math.round((c - r) * s) - 1;
-    const centre = c * s - x0;
+    const x0 = Math.floor(cx - rp) - 1;
+    const y0 = Math.floor(cy - rp) - 1;
+    const [centreX, centreY] = [cx - x0, cy - y0];
     // A pixel's stable-member X component decides its half: the light half is +X.
     const [ax, ay, az] = [m[0], m[3], m[6]];
     const edge = 1.2 / rp;
     for (let j = 0; j < n; j++) {
-      const up = (centre - j - 0.5) / rp;
+      const up = (centreY - j - 0.5) / rp;
       for (let i = 0; i < n; i++) {
-        const right = (i + 0.5 - centre) / rp;
+        const right = (i + 0.5 - centreX) / rp;
         const d2 = right * right + up * up;
         const o = (j * n + i) * 4;
         if (d2 >= 1 + 2 * edge) {
@@ -122,7 +125,7 @@ export class Fdai {
         data[o + 3] = 255 * Math.max(0, Math.min(1, (1 - Math.sqrt(d2)) / edge + 0.5));
       }
     }
-    this.ctx.putImageData(this.image, x0, x0);
+    this.ctx.putImageData(this.image, x0, y0);
   }
 
   /** Pitch lines every 10 degrees, yaw lines every 30, and their numbers. */
@@ -229,7 +232,7 @@ export class Fdai {
       ctx.lineTo(x2, y2);
       ctx.stroke();
       if (major && v % 90 !== 0) {
-        const [x, y] = at(v * DEG, r + 18);
+        const [x, y] = at(v * DEG, r * 1.25);
         ctx.fillText(String(v), x, y);
       }
     }
@@ -298,7 +301,7 @@ export class Fdai {
     }
 
     // Rate scales: ticks at full scale, half scale and zero, and a pointer.
-    const gap = r + 32;
+    const gap = r * 1.42;
     const half = r * 0.62;
     const rate = rates.map((w) => clamp1(w / RATE_FULL_SCALE) * half) as Vec3;
     ctx.strokeStyle = CASE_INK;

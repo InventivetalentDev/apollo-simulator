@@ -1,7 +1,8 @@
 // The LM panel: the RCS jets seen from above, the IMU gimbal angles and body
-// rates, the attitude ball (FDAI), the PGNS mode switch, the IMU switch, and a hand controller
+// rates, the PGNS mode switch, the IMU switch, and a hand controller
 // (on-screen buttons or the keyboard).  In orbit it also shows the LM's true
 // altitude, speeds, thrust and propellant, and the powered-descent checklist.
+// The attitude ball (FDAI) it drives sits in its own panel, beside the 3D view.
 
 import type { AGC } from '../agc/cpu.ts';
 import type { DskyKey } from '../agc/dsky.ts';
@@ -165,6 +166,8 @@ export class LmPanel {
   constructor(
     readonly host: HTMLElement,
     private readonly checklistHost: ChecklistHost,
+    /** Where the attitude ball goes: its own panel, beside the 3D view. */
+    private readonly fdaiHost: HTMLElement,
   ) {
     host.innerHTML = `
       <div class="craft-head">
@@ -213,10 +216,6 @@ export class LmPanel {
           </div>
         </div>
       </div>
-      <figure class="fdai">
-        <canvas class="fdai-ball" role="img" aria-label="Attitude ball (FDAI), with the computer's attitude-error needles and the rate needles"></canvas>
-        <figcaption class="hint">The ball holds still in space while the LM turns around it: its centre shows where the front of the LM points. The needles across the ball come from the original software and point the way to turn to reach the attitude it wants. The pointers outside show how fast the LM turns.</figcaption>
-      </figure>
       <div class="readout descent" hidden>
         <span class="k">Descent <small>true values; the DSKY shows the computer's</small></span>
         <div class="trio five">
@@ -247,7 +246,13 @@ export class LmPanel {
       imu: host.querySelector('#craft-imu')!,
     };
     for (const g of host.querySelectorAll<SVGGElement>('.jet')) this.jetEls[Number(g.dataset.jet)] = g;
-    this.fdai = new Fdai(host.querySelector('.fdai-ball')!);
+    fdaiHost.innerHTML = `
+      <h2 id="fdai-title">Attitude ball</h2>
+      <canvas class="fdai-ball" role="img"
+        aria-label="Attitude ball (FDAI), with the computer's attitude-error needles and the rate needles"
+        title="The ball holds still in space while the LM turns around it: its centre shows where the front of the LM points. The needles across the ball come from the original software and point the way to turn to reach the attitude it wants. The pointers outside show how fast the LM turns."></canvas>
+      <p class="fdai-key">Centre: where the LM points. Needles: the way to turn.</p>`;
+    this.fdai = new Fdai(fdaiHost.querySelector('.fdai-ball')!);
 
     host.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
@@ -292,6 +297,7 @@ export class LmPanel {
     this.addressOf = addressOf;
     this.restartChecklist();
     this.host.hidden = !lm;
+    this.fdaiHost.hidden = !lm;
     this.held.clear();
     this.lastJetSeconds.fill(0);
     this.glowUntil.fill(0);

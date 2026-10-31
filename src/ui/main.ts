@@ -73,7 +73,7 @@ const craft = new LmPanel($('#craft'), {
     els.speed.value = String(speed);
     if (machine) machine.speed = speed;
   },
-});
+}, $('#fdai'));
 let view: LmView | null = null;
 
 const source = new SourceView($('.source'), {

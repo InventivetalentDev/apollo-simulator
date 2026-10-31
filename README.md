@@ -63,19 +63,18 @@ Click the keys or type on your keyboard: digits, `V` (VERB), `N` (NOUN),
 
 With the LM program selected, the panel under the DSKY is the spacecraft:
 the 16 RCS jets seen from above (lit while firing), the IMU gimbal angles,
-the body rates, the attitude ball (FDAI), the PGNS mode switch and a hand
-controller.
-
-The attitude ball stands for the stable member, which holds still in space
-while the LM turns around it; its centre shows where the front of the LM
-points. The needles across the ball are the attitude errors the flight
-software sends through the CDU error counters (its NEEDLER routine), and the
-pointers outside the ball show the body rates. Full scale is 5° of error and
-5°/s of rate.
+the body rates, the PGNS mode switch and a hand controller.
 
 The 3D view above the listing shows the LM at its current attitude against
 the stars, with a plume on each jet while it fires. Drag to look around and
 scroll to zoom.
+
+Beside it, the attitude ball (FDAI) stands for the stable member, which
+holds still in space while the LM turns around it; its centre shows where
+the front of the LM points. The needles across the ball are the attitude
+errors the flight software sends through the CDU error counters (its NEEDLER
+routine), and the pointers outside the ball show the body rates. Full scale
+is 5° of error and 5°/s of rate.
 
 1. Wait about 12 s after the page loads. The software zeroes the IMU's angle
    counters and lets them count up to the gimbal angles, then wakes the
