@@ -41,6 +41,13 @@ const START: DescentStep = {
 /** True while the DSKY flashes this verb and noun (or just this verb), waiting for the crew. */
 const asking = (d: DskyState, verbNoun: string) => d.vnFlashing && (d.verb + d.noun === verbNoun || d.verb === verbNoun);
 
+const RELOAD: DescentStep = {
+  number: 1,
+  title: 'Set up powered descent',
+  detail: 'The computer restarted and lost its descent data. Click “Set up powered descent” under Try it to load it again.',
+  key: null,
+};
+
 export class DescentChecklist {
   private startedP63 = false;
   private turned = false;
@@ -49,13 +56,18 @@ export class DescentChecklist {
   private accepted = false;
   private enabled = false;
   private ignitionAt = 0;
-  private last: DescentStep = START;
-
+  private last: DescentStep;
   private readonly tigAddress: number;
+  private readonly loaded: boolean;
 
-  /** `tigAddress` is the erasable address of TIG, the ignition time, for the countdown (-1 for none). */
-  constructor(tigAddress = -1) {
+  /**
+   * `tigAddress` is the erasable address of TIG, the ignition time, for the countdown (-1 for none).
+   * `loaded` is false when the computer's memory no longer holds the descent setup.
+   */
+  constructor(tigAddress = -1, loaded = true) {
     this.tigAddress = tigAddress;
+    this.loaded = loaded;
+    this.last = loaded ? START : RELOAD;
   }
 
   /** The step the crew is on, or null when the LM is not in orbit. */
@@ -100,7 +112,7 @@ export class DescentChecklist {
         key: null,
       };
     }
-    if (!this.startedP63) return START;
+    if (!this.startedP63) return this.loaded ? START : RELOAD;
     if (asking(d, '0661')) {
       return {
         number: 2,

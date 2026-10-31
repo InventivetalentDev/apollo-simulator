@@ -153,7 +153,7 @@ els.speed.addEventListener('change', () => {
 els.power.addEventListener('click', () => {
   if (!machine) return;
   machine.reset();
-  craft.restartChecklist();
+  craft.restartChecklist(false);
   refreshPanels(true);
 });
 

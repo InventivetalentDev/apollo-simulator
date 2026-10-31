@@ -313,9 +313,9 @@ export class LmPanel {
     this.updateChecklist(lm, this.agc);
   }
 
-  /** Start the descent checklist over, after a setup or a computer restart. */
-  restartChecklist(): void {
-    this.checklist = new DescentChecklist(this.tig);
+  /** Start the descent checklist over: after a setup, or after a restart that cleared memory (`loaded` false). */
+  restartChecklist(loaded = true): void {
+    this.checklist = new DescentChecklist(this.tig, loaded);
     this.step = null;
     this.fastForward(false);
     this.cue(null);
