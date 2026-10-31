@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AGC, REG } from '../src/agc/cpu.ts';
+import { readDsky } from '../src/agc/dsky.ts';
+import { descentState, loadDescent, prepareLunarModule } from '../src/sim/descent.ts';
 import { DescentEngine, DPS_FULL_THROTTLE, DPS_MINIMUM, pivotToCg } from '../src/sim/descent-engine.ts';
 import { LunarModule } from '../src/sim/lm.ts';
 import { MOON_MU, moonAxes, moonFixedToInertial, inertialToMoonFixed } from '../src/sim/moon.ts';
+import { bootLm } from './helpers.ts';
 
 const DEG = Math.PI / 180;
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -58,7 +61,7 @@ test('descent engine: the throttle adds the computer\'s pulses to the minimum, u
   assert.ok(Math.abs(pivotToCg(15100) - 0.866) < 0.005, 'pivot 0.87 m below the centre of mass at 15.1 t');
 });
 
-test('in orbit mode the LM falls around the Moon, and the accelerometers feel only the engine', () => {
+test('in orbit mode the LM coasts around the Moon, and the accelerometers feel only the engine', () => {
   const agc = new AGC(new Uint16Array(36 * 1024));
   const lm = new LunarModule(agc);
   lm.orbiting = true;
@@ -69,7 +72,7 @@ test('in orbit mode the LM falls around the Moon, and the accelerometers feel on
   const tick = () => lm.tick();
   for (let i = 0; i < 60 * 3200; i++) tick();
   const radius = Math.hypot(...lm.position);
-  assert.ok(Math.abs(radius - r) < 5, `circular orbit holds its radius (${(radius - r).toFixed(2)} m)`);
+  assert.ok(Math.abs(radius - r) < 5, `a circular orbit keeps its radius for a minute (${(radius - r).toFixed(2)} m)`);
   assert.equal(agc.mem[REG.PIPAX] | agc.mem[REG.PIPAY] | agc.mem[REG.PIPAZ], 0, 'free fall: no accelerometer counts');
 
   // Engine on at the minimum for 10 s: about 0.3 m/s^2 along body +X.
@@ -90,4 +93,79 @@ test('in orbit mode the LM falls around the Moon, and the accelerometers feel on
   agc.channels[0o12] |= 0o10000;
   for (let i = 0; i < 11 * 3200; i++) tick();
   assert.equal(agc.channels[0o33] & 0o360, 0o260, 'antenna in position 2, no data');
+});
+
+test('Luminary099 flies P63 from the descent setup to high gate', () => {
+  const { agc, lm, run, keys, address } = bootLm();
+  const state = descentState();
+  prepareLunarModule(lm, state);
+  run(16);
+  loadDescent(agc, lm, address, state);
+  // RSET clears the fresh start's alarm; V48 loads the autopilot data (15,100 kg).
+  keys('RSET V 4 8 E V 2 1 E 2 1 1 0 2 E PRO V 2 1 E + 3 3 2 9 0 E PRO PRO');
+  run(2);
+  keys('V 3 7 E 6 3 E');
+
+  const word = (a: number) => (agc.mem[a] & 0o40000 ? -(~agc.mem[a] & 0o37777) : agc.mem[a]);
+  const double = (name: string, scaleExponent: number, offset = 0) => {
+    const a = address(name) + offset;
+    return ((word(a) * 2 ** 14 + word(a + 1)) / 2 ** 28) * 2 ** scaleExponent;
+  };
+  const clock = () => (agc.mem[REG.TIME2] * 2 ** 14 + agc.mem[REG.TIME1]) / 100;
+  // How far the computer's position (RN, at PIPTIME) is above or below the LM's.
+  const radialError = () => {
+    const rn = [0, 2, 4].map((k) => double('RN', 29, k));
+    const lag = clock() - double('PIPTIME', 28) / 100;
+    const truth = lm.position.map((x, k) => x - lm.velocity[k] * lag);
+    const up = truth.map((x) => x / Math.hypot(...truth));
+    return rn.reduce((sum, x, k) => sum + (x - truth[k]) * up[k], 0);
+  };
+
+  // The crew's part: proceed through the displays P63 shows.
+  const answered = new Set<string>();
+  let ignition = 0;
+  let errorAtIgnition = NaN;
+  let fullThrottle = 0;
+  let highGate: { time: number; altitude: number; error: number } | undefined;
+  for (let t = 0; t < 900 && !highGate; t += 0.5) {
+    run(0.5);
+    const d = readDsky(agc);
+    const vn = d.verb + d.noun;
+    if (vn === '0661' && !answered.has('N61')) {
+      answered.add('N61');
+      keys('PRO');
+    } else if (vn === '5025' && d.r[0].trim() === '00014' && !answered.has('N25')) {
+      answered.add('N25');
+      keys('E'); // no fine alignment
+    } else if (vn === '5018' && !answered.has('maneuver')) {
+      answered.add('maneuver');
+      keys('PRO'); // turn to the ignition attitude
+    } else if (vn === '5018' && !answered.has('attitude')) {
+      answered.add('attitude');
+      keys('E'); // accept it
+    } else if (d.verb === '99' && !answered.has('V99')) {
+      answered.add('V99');
+      keys('PRO'); // engine enable
+    }
+    if (!ignition && DescentEngine.commandedOn(agc.channels[0o11])) {
+      ignition = clock();
+      errorAtIgnition = radialError();
+    }
+    if (ignition && clock() - ignition > 40 && !fullThrottle) fullThrottle = lm.engine.thrust;
+    if (d.prog === '64') highGate = { time: clock(), altitude: Math.hypot(...lm.position) - lm.surfaceRadius, error: radialError() };
+  }
+
+  const fmt = (s: number) => `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${(s % 60).toFixed(0).padStart(2, '0')}`;
+  // Apollo 11 lit the engine at 102:33:05.
+  const apollo11 = 102 * 3600 + 33 * 60 + 5;
+  assert.ok(ignition && Math.abs(ignition - apollo11) < 60, `ignition at ${fmt(ignition)}`);
+  // The computer coasted its state to the burn with the same lunar gravity as the simulation.
+  assert.ok(Math.abs(errorAtIgnition) < 20, `computer within 20 m of the LM at ignition (${errorAtIgnition.toFixed(1)} m)`);
+  assert.ok(Math.abs(fullThrottle - DPS_FULL_THROTTLE) < 100, `full throttle after the zoom time (${fullThrottle.toFixed(0)} N)`);
+  assert.ok(highGate, 'P64 reached');
+  assert.ok(highGate.altitude > 1500 && highGate.altitude < 3000, `high gate at ${highGate.altitude.toFixed(0)} m, ${fmt(highGate.time)}`);
+  // Without landing-radar data the computer's altitude drifts high: its powered-flight gravity is a sphere.
+  assert.ok(Math.abs(highGate.error) < 100, `computer within 100 m of the LM at high gate (${highGate.error.toFixed(1)} m)`);
+  assert.equal(agc.restarts, 0, 'no restarts');
+  assert.deepEqual([0, 1, 2].map((k) => agc.mem[address('FAILREG') + k]), [0, 0, 0], 'no alarms');
 });

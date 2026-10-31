@@ -38,7 +38,7 @@ import {
   type Vec3,
 } from './attitude.ts';
 import { DescentEngine, pivotToCg } from './descent-engine.ts';
-import { MOON_MU } from './moon.ts';
+import { moonGravity } from './moon.ts';
 
 const TICK = 1 / 3200; // the computer's scaler calls the hardware 3200 times a second
 const LBF = 4.4482216;
@@ -161,6 +161,8 @@ export class LunarModule implements Peripheral {
   velocity: Vec3 = [0, 0, 0];
   /** Radius of the lunar surface under the LM, m: in orbit mode the LM stops there. */
   surfaceRadius = 0;
+  /** Seconds since the ephemeris epoch: where the Moon has turned to, for its gravity. */
+  ephemerisTime = 0;
   /** The LM reached the surface. */
   landed = false;
   readonly engine = new DescentEngine();
@@ -314,6 +316,12 @@ export class LunarModule implements Peripheral {
 
   // ---- Orbit mode.
 
+  /** Landing radar back to its starting state: antenna in position 1, no read in progress. */
+  resetLandingRadar(): void {
+    this.radarRead = -1;
+    this.radarSwing = 0;
+  }
+
   /** Descent engine thrust and the trim gimbal's torque, added to the body-axis force and torque. */
   private descentEngine(force: Vec3, torque: Vec3): void {
     const agc = this.agc;
@@ -335,13 +343,12 @@ export class LunarModule implements Peripheral {
 
   /** Gravity moves the LM along its orbit, until it reaches the surface. */
   private fall(): void {
+    const g = moonGravity(this.position, this.ephemerisTime);
+    this.ephemerisTime += TICK;
     if (this.landed) return;
-    const [x, y, z] = this.position;
-    const r = Math.hypot(x, y, z);
-    const g = -MOON_MU / (r * r * r);
-    for (let k = 0; k < 3; k++) this.velocity[k] += g * this.position[k] * TICK;
+    for (let k = 0; k < 3; k++) this.velocity[k] += g[k] * TICK;
     for (let k = 0; k < 3; k++) this.position[k] += this.velocity[k] * TICK;
-    if (r <= this.surfaceRadius) {
+    if (Math.hypot(...this.position) <= this.surfaceRadius) {
       this.landed = true;
       this.velocity = [0, 0, 0];
     }
@@ -351,7 +358,7 @@ export class LunarModule implements Peripheral {
    * The landing radar, present but without data: it answers each read the
    * computer starts (channel 13 bit 4) with an empty count and a RADARUPT,
    * leaves the data-good bits off (channel 33 bits 5 and 8), and swings its
-   * antenna from position 1 to position 2 when channel 12 bit 13 asks.
+   * antenna from position 1 to position 2 while channel 12 bit 13 asks.
    * Without it the read job waits forever and the computer restarts (1210).
    */
   private landingRadar(): void {
@@ -368,8 +375,9 @@ export class LunarModule implements Peripheral {
     } else {
       this.radarRead = -1;
     }
+    // The antenna moves only while commanded, and stays in position 2 once
+    // there: the software removes the command after it arrives.
     if (agc.channels[0o12] & 0o10000) this.radarSwing = Math.min(RADAR_SWING_TICKS, this.radarSwing + 1);
-    else this.radarSwing = Math.max(0, this.radarSwing - 1);
     // Active low: bit 6 = antenna in position 1, bit 7 = in position 2.
     const position = this.radarSwing === 0 ? 0o40 : this.radarSwing === RADAR_SWING_TICKS ? 0o100 : 0;
     const ch33 = (agc.channels[0o33] | 0o360) & ~position;

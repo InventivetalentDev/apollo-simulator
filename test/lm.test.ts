@@ -1,10 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AGC, MCT_PER_SECOND } from '../src/agc/cpu.ts';
-import { pressKey, readDsky, releaseKey, type DskyKey } from '../src/agc/dsky.ts';
+import { readDsky } from '../src/agc/dsky.ts';
 import { cross, DEG, gimbalAngles, gimbalMatrix, type Vec3 } from '../src/sim/attitude.ts';
-import { inertiaForMass, JETS, jetsFromChannels, LunarModule } from '../src/sim/lm.ts';
-import { assembleProgram } from './helpers.ts';
+import { inertiaForMass, JETS, jetsFromChannels } from '../src/sim/lm.ts';
+import { bootLm } from './helpers.ts';
 
 test('gimbal angles survive a round trip through the stable-member-to-navigation-base matrix', () => {
   for (const [o, i, m] of [
@@ -54,27 +53,6 @@ test('the jets wired to channels 5 and 6 do what the autopilot\'s jet tables say
 test('moments of inertia from the 1/ACCS fits are in the range of a fuelled LM', () => {
   for (const i of inertiaForMass(15100)) assert.ok(i > 30000 && i < 40000, `${i} kg m^2`);
 });
-
-function bootLm() {
-  const { result } = assembleProgram('Luminary099');
-  const agc = new AGC(result.rope);
-  const lm = new LunarModule(agc);
-  agc.peripheral = lm;
-  const run = (seconds: number) => agc.run(Math.round(seconds * MCT_PER_SECOND));
-  const keys = (seq: string) => {
-    for (const tok of seq.split(' ')) {
-      const key = ({ V: 'VERB', N: 'NOUN', E: 'ENTR' } as Record<string, DskyKey>)[tok] ?? (tok as DskyKey);
-      pressKey(agc, key);
-      if (key === 'PRO') {
-        run(0.3);
-        releaseKey(agc, key);
-      }
-      run(0.15);
-    }
-  };
-  const erasable = (name: string) => agc.mem[result.symbols.find((s) => s.name === name)!.value];
-  return { agc, lm, run, keys, erasable };
-}
 
 test('Luminary099 flies the LM: IMU start-up, attitude hold and an automatic maneuver', () => {
   const { agc, lm, run, keys, erasable } = bootLm();
