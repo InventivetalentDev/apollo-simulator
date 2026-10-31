@@ -1,18 +1,20 @@
 import './styles.css';
 import { INTERRUPT_NAMES, overflowCorrected, REG, type AGC } from '../agc/cpu.ts';
 import { readDsky, type DskyKey } from '../agc/dsky.ts';
-import { PROGRAMS, type ProgramInfo } from '../programs.ts';
+import { PROGRAMS, sourceLink, type ProgramInfo } from '../programs.ts';
 import { ropeHash } from '../yul/rope-hash.ts';
 import { assembleSources, type AssembleResponse } from './assemble-sources.ts';
 import { COMMANDS, displayKeys, parseKeys } from './commands.ts';
 import { DskyView, KEYBOARD_MAP } from './dsky-view.ts';
 import { Machine } from './machine.ts';
-import { formatAddress, ropeIndexOf, SourceView } from './source-view.ts';
+import { formatAddress, ropeIndexOf, SourceView, type SourceLinker } from './source-view.ts';
 
 interface LoadedProgram {
   info: ProgramInfo;
   response: AssembleResponse;
   expectedRopeHash: string | null;
+  /** Links a file or line to the same text on GitHub, at the submodule commit. */
+  link: SourceLinker;
   /** Labels on code, sorted by rope index, for naming the routine at any address. */
   labelIndex: Int32Array;
   labelNames: string[];
@@ -137,7 +139,13 @@ for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-program]')
 
 // ---- Loading and assembling
 
-async function fetchSources(info: ProgramInfo): Promise<{ files: Record<string, string>; expectedRopeHash: string | null }> {
+interface SourceBundle {
+  files: Record<string, string>;
+  expectedRopeHash: string | null;
+  sourceCommit: string;
+}
+
+async function fetchSources(info: ProgramInfo): Promise<SourceBundle> {
   const res = await fetch(`agc/${info.id}.json`);
   if (!res.ok) throw new Error(`Could not load agc/${info.id}.json (HTTP ${res.status})`);
   return res.json();
@@ -212,7 +220,7 @@ async function loadProgram(id: string): Promise<void> {
     els.loading.hidden = false;
     els.loadingText.textContent = `Loading the original ${info.id} source…`;
     try {
-      const { files, expectedRopeHash } = await fetchSources(info);
+      const { files, expectedRopeHash, sourceCommit } = await fetchSources(info);
       if (token !== loadToken) return;
       const lines = Object.values(files).reduce((n, t) => n + t.split('\n').length, 0);
       els.loadingText.textContent = `Assembling ${lines.toLocaleString()} lines of AGC source…`;
@@ -224,7 +232,8 @@ async function loadProgram(id: string): Promise<void> {
         response = assembleSources({ programId: id, files });
       }
       if (token !== loadToken) return;
-      loaded = { info, response, expectedRopeHash, ...buildLabelIndex(response), jobTracker: buildJobTracker(response) };
+      const link: SourceLinker = (file, line) => sourceLink(sourceCommit, info.directory, file, line);
+      loaded = { info, response, expectedRopeHash, link, ...buildLabelIndex(response), jobTracker: buildJobTracker(response) };
       cache.set(id, loaded);
     } catch (err) {
       els.loadingText.textContent = String(err instanceof Error ? err.message : err);
@@ -233,8 +242,14 @@ async function loadProgram(id: string): Promise<void> {
   }
   program = loaded;
   heatBase = new Map();
+  lastLocation = ''; // both programs share file names, so the link must be rebuilt
   const { response } = loaded;
-  source.load(response.result, response.texts, (info.corrections ?? []).map((c) => ({ file: c.file, line: c.line, reason: c.reason })));
+  source.load(
+    response.result,
+    response.texts,
+    (info.corrections ?? []).map((c) => ({ file: c.file, line: c.line, reason: c.reason })),
+    loaded.link,
+  );
   els.loading.hidden = true;
   showAssemblyStatus(loaded);
   machine = new Machine(response.result.rope);
@@ -298,6 +313,7 @@ function ropeLocation(ropeIndex: number): string {
 
 const oct = (v: number, w = 5) => v.toString(8).padStart(w, '0');
 let lastPanelUpdate = 0;
+let lastLocation = '';
 let heatBase = new Map<number, number>();
 
 function refreshPanels(force = false): void {
@@ -313,7 +329,23 @@ function refreshPanels(force = false): void {
   const loc = source.locate(lineId);
   els.routine.textContent = routineAt(ropeIndex);
   const context = agc.isr ? `interrupt ${INTERRUPT_NAMES[agc.isr]}` : agc.channels[0o11] & 2 ? 'job' : 'idle loop';
-  els.location.textContent = loc ? `${r.files[loc.file].name}:${loc.line} · ${ropeLocation(ropeIndex)} · ${context}` : context;
+  const where = loc ? `${r.files[loc.file].name}:${loc.line}` : '';
+  const location = where ? `${where} · ${ropeLocation(ropeIndex)} · ${context}` : context;
+  // Rewrite only on change, so the link stays clickable while the computer runs.
+  if (location !== lastLocation) {
+    lastLocation = location;
+    if (loc) {
+      const a = document.createElement('a');
+      a.href = program.link(r.files[loc.file].name, loc.line);
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.title = 'Open this line on GitHub';
+      a.textContent = where;
+      els.location.replaceChildren(a, ` · ${ropeLocation(ropeIndex)} · ${context}`);
+    } else {
+      els.location.textContent = context;
+    }
+  }
 
   const cs = agc.mem[REG.TIME2] * 16384 + agc.mem[REG.TIME1];
   const s = Math.floor(cs / 100);

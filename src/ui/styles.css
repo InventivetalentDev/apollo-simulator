@@ -448,6 +448,15 @@ kbd {
 .about {
   padding: 14px 16px 16px;
 }
+.about a {
+  color: var(--text);
+  text-decoration-color: var(--line);
+  text-underline-offset: 2px;
+}
+.about a:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
 .about ul {
   margin: 8px 0 0;
   padding-left: 18px;
@@ -501,6 +510,15 @@ kbd {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.stat .sub a {
+  color: var(--text);
+  text-decoration-color: var(--line);
+  text-underline-offset: 2px;
+}
+.stat .sub a:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
 }
 .cpu-row {
   display: flex;
@@ -573,11 +591,21 @@ kbd {
 #source-file {
   max-width: min(100%, 460px);
 }
+.gh-link {
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.gh-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
 .search {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 220px;
+  flex: 1 1 160px;
 }
 .search input {
   width: 100%;
@@ -633,6 +661,11 @@ kbd {
   text-align: right;
   color: #4d5862;
   padding-right: 1ch;
+  text-decoration: none;
+}
+.row .ln:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 .row .addr {
   width: 8.5ch;

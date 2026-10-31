@@ -84,7 +84,9 @@ test, and checksums of all 36 rope banks.
 tracks the code the Executive is running: key in a verb and the listing jumps
 into PINBALL, the DSKY program. Inside the interpreter it shows the interpretive
 instruction being executed. Lines that ran in the last moment get a green
-marker.
+marker. Each line number, the file name and the "Running" location link to the
+same line in chrislgarry/Apollo-11 on GitHub, at the commit checked out in
+`vendor/Apollo-11`, so the line numbers always match.
 
 Both pieces were written for this project. The Virtual AGC project's yaYUL
 and yaAGC (GPL) were the reference for the exact behaviour of the assembler

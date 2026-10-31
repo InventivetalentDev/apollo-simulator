@@ -56,6 +56,7 @@
             <ul>
               <li>The DSKY was the crew's keyboard and display. Every lamp and digit here is set by the original 1969 software, through the same I/O channels the real hardware used.</li>
               <li>The listing is the actual Apollo 11 source. Your browser assembles it into the 36 banks of core rope, and an emulated Block II computer runs it at 85,333 memory cycles a second.</li>
+              <li>The source comes from <a href="https://github.com/chrislgarry/Apollo-11" target="_blank" rel="noopener">chrislgarry/Apollo-11</a> on GitHub. Click any line number in the listing, or the file and line under “Running”, to open the same line there.</li>
               <li>The spacecraft around the computer is not simulated yet: no IMU, radar, engines or hand controllers. Guidance programs such as P63, the powered descent, wait for sensor data that never arrives.</li>
             </ul>
           </section>
@@ -86,9 +87,10 @@
             <div class="source-head">
               <label class="visually-hidden" for="source-file">Source file</label>
               <select id="source-file"></select>
+              <a id="source-github" class="gh-link" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
               <div class="search">
                 <label class="visually-hidden" for="source-search">Jump to label</label>
-                <input id="source-search" list="source-symbols" placeholder="Jump to label, e.g. BURNBABY" autocomplete="off" spellcheck="false" />
+                <input id="source-search" list="source-symbols" placeholder="Label, e.g. BURNBABY" autocomplete="off" spellcheck="false" />
                 <datalist id="source-symbols"></datalist>
                 <span id="source-search-status" role="status"></span>
               </div>

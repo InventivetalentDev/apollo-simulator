@@ -12,6 +12,19 @@ export interface SourceCorrection {
   reason: string;
 }
 
+/** The repository the source comes from (checked out as the vendor/Apollo-11 submodule). */
+export const SOURCE_REPOSITORY = 'https://github.com/chrislgarry/Apollo-11';
+
+/**
+ * Link to a program directory, a file, or one line of a file in the source
+ * repository.  `commit` should be the checked-out submodule commit, so line
+ * numbers match the text that was assembled.
+ */
+export function sourceLink(commit: string, directory: string, file?: string, line?: number): string {
+  if (!file) return `${SOURCE_REPOSITORY}/tree/${commit}/${directory}`;
+  return `${SOURCE_REPOSITORY}/blob/${commit}/${directory}/${encodeURIComponent(file)}${line ? `#L${line}` : ''}`;
+}
+
 export interface ProgramInfo {
   id: string;
   directory: string;

@@ -65,9 +65,16 @@ export interface SourceViewOptions {
   onUserNavigate: () => void;
 }
 
+/** Builds a link to a file, or one line of it, in the source repository. */
+export type SourceLinker = (file: string, line?: number) => string;
+
 export class SourceView {
   readonly el: HTMLElement;
   private scroller: HTMLElement;
+  private fileLink: HTMLAnchorElement;
+  private link: SourceLinker = () => '';
+  /** True while a line-number link is pressed: re-rendering then would swallow the click. */
+  private holdRender = false;
   private spacer: HTMLElement;
   private rows: HTMLElement;
   private fileSelect: HTMLSelectElement;
@@ -90,6 +97,7 @@ export class SourceView {
     this.fileSelect = parent.querySelector('#source-file')!;
     this.searchInput = parent.querySelector('#source-search')!;
     this.searchStatus = parent.querySelector('#source-search-status')!;
+    this.fileLink = parent.querySelector('#source-github')!;
     this.scroller = parent.querySelector('.code-scroll')!;
     this.spacer = parent.querySelector('.code-spacer')!;
     this.rows = parent.querySelector('.code-rows')!;
@@ -99,6 +107,19 @@ export class SourceView {
       this.queueRender();
     });
     new ResizeObserver(() => this.queueRender()).observe(this.scroller);
+    this.rows.addEventListener('pointerdown', (e) => {
+      if ((e.target as Element).closest('a.ln')) this.holdRender = true;
+    });
+    const release = () => {
+      if (!this.holdRender) return;
+      // Let the click land on the link before the rows are rebuilt.
+      setTimeout(() => {
+        this.holdRender = false;
+        this.queueRender();
+      });
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
     this.fileSelect.addEventListener('change', () => {
       this.options.onUserNavigate();
       this.openFile(Number(this.fileSelect.value), 0);
@@ -108,9 +129,15 @@ export class SourceView {
     });
   }
 
-  load(result: AssemblyResult, texts: string[], corrections: { file: string; line: number; reason: string }[]): void {
+  load(
+    result: AssemblyResult,
+    texts: string[],
+    corrections: { file: string; line: number; reason: string }[],
+    link: SourceLinker,
+  ): void {
     this.result = result;
     this.texts = texts;
+    this.link = link;
     this.corrected.clear();
     for (const c of corrections) {
       const f = result.files.find((ff) => ff.name === c.file);
@@ -151,6 +178,7 @@ export class SourceView {
   setCurrent(lineId: number, follow: boolean): void {
     if (lineId === this.current && !follow) return;
     this.current = lineId;
+    if (this.holdRender) return; // keep the view still until the pressed link is released
     if (follow && lineId >= 0) this.reveal(lineId, false);
     else this.queueRender();
   }
@@ -198,6 +226,9 @@ export class SourceView {
     if (!this.result) return;
     this.fileIndex = index;
     this.fileSelect.value = String(index);
+    const name = this.result.files[index].name;
+    this.fileLink.href = this.link(name);
+    this.fileLink.title = `Open ${name} on GitHub`;
     this.lines = this.texts[index].split('\n');
     if (this.lines.length && this.lines[this.lines.length - 1] === '') this.lines.pop();
     this.spacer.style.height = `${this.lines.length * LINE_HEIGHT}px`;
@@ -233,9 +264,10 @@ export class SourceView {
 
   private render(): void {
     const r = this.result;
-    if (!r) return;
+    if (!r || this.holdRender) return;
     const { first, last } = this.visibleRange();
     const base = r.files[this.fileIndex].firstLine;
+    const file = r.files[this.fileIndex].name;
     let html = '';
     for (let i = first; i < last; i++) {
       const id = base + i;
@@ -251,7 +283,7 @@ export class SourceView {
       if (fix) cls.push('corrected');
       html +=
         `<div class="${cls.join(' ')}" style="top:${i * LINE_HEIGHT}px"${fix ? ` title="Corrected: ${escapeHtml(fix)}"` : ''}>` +
-        `<span class="ln">${i + 1}</span><span class="addr">${formatAddress(words ? addr : -1)}</span>` +
+        `<a class="ln" href="${escapeHtml(this.link(file, i + 1))}" target="_blank" rel="noopener" tabindex="-1" title="Line ${i + 1} on GitHub${fix ? ' (shows the uncorrected upstream text)' : ''}">${i + 1}</a><span class="addr">${formatAddress(words ? addr : -1)}</span>` +
         `<span class="words">${words}</span><span class="src">${highlight(this.lines[i])}</span></div>`;
     }
     this.rows.innerHTML = html;

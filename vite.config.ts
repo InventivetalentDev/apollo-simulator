@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from 'vite';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PROGRAMS } from './src/programs.ts';
@@ -8,8 +9,21 @@ import { ropeHash } from './src/yul/rope-hash.ts';
 // Serves the original AGC source files from the vendor/Apollo-11 submodule as
 // one JSON document per program (agc/<id>.json), which the browser assembles.
 // Also includes a hash of the 1969 octal listing so the page can confirm that
-// what it assembled matches the flown core rope.
+// what it assembled matches the flown core rope, and the submodule commit for
+// links back to the source on GitHub.
 function agcSources(): Plugin {
+  // The checked-out submodule commit, so the page can link each line to the
+  // same line on GitHub.
+  let sourceCommit: string | null = null;
+  const commit = (): string => {
+    if (sourceCommit) return sourceCommit;
+    try {
+      sourceCommit = execFileSync('git', ['-C', 'vendor/Apollo-11', 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    } catch (err) {
+      throw new Error(`Could not read the vendor/Apollo-11 commit with git: ${err instanceof Error ? err.message : err}`);
+    }
+    return sourceCommit;
+  };
   const bundle = (id: string): string | null => {
     const program = PROGRAMS.find((p) => p.id === id);
     if (!program) return null;
@@ -21,7 +35,7 @@ function agcSources(): Plugin {
     for (const f of readdirSync(dir).sort()) if (f.endsWith('.agc')) files[f] = readFileSync(join(dir, f), 'utf8');
     const fixture = join('test/fixtures', `${id}.binsource`);
     const expectedRopeHash = existsSync(fixture) ? ropeHash(parseBinsource(readFileSync(fixture, 'utf8'))) : null;
-    return JSON.stringify({ program: id, files, expectedRopeHash });
+    return JSON.stringify({ program: id, files, expectedRopeHash, sourceCommit: commit() });
   };
   return {
     name: 'agc-sources',
