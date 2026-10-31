@@ -151,10 +151,19 @@ interface SourceBundle {
   sourceCommit: string;
 }
 
+// The sources come gzipped (see vite.config.ts). If a host labels the file
+// with Content-Encoding: gzip, the browser unzips it before we see it, so check
+// for the gzip header bytes instead of assuming.
 async function fetchSources(info: ProgramInfo): Promise<SourceBundle> {
-  const res = await fetch(`agc/${info.id}.json`);
-  if (!res.ok) throw new Error(`Could not load agc/${info.id}.json (HTTP ${res.status})`);
-  return res.json();
+  const url = `agc/${info.id}.json.gz`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not load ${url} (HTTP ${res.status})`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const gzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
+  const text = gzipped
+    ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
+    : new TextDecoder().decode(bytes);
+  return JSON.parse(text);
 }
 
 function assembleInWorker(programId: string, files: Record<string, string>): Promise<AssembleResponse> {
