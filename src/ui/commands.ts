@@ -8,6 +8,8 @@ export interface Command {
   detail: string;
   /** Show only for this spacecraft (default: both). */
   vehicle?: 'LM' | 'CM';
+  /** Before typing the keys, put the simulation in this state. */
+  setup?: 'descent';
 }
 
 export const COMMANDS: Command[] = [
@@ -29,6 +31,21 @@ export const COMMANDS: Command[] = [
     keys: 'V 3 7 E 0 0 E V 4 9 E V 2 5 E + 0 4 5 0 0 E + 0 1 0 0 0 E + 0 0 0 0 0 E PRO',
     detail:
       'Set the mode switch to Auto first. In P00, verb 49 takes target gimbal angles (here 45°, 10°, 0°). When V50 N18 flashes, press PRO and the attitude maneuver routine (KALCMANU) turns the LM at 2°/s.',
+    vehicle: 'LM',
+  },
+  {
+    title: 'Set up powered descent',
+    keys: 'RSET V 4 8 E V 2 1 E 2 1 1 0 2 E PRO V 2 1 E + 3 3 2 9 0 E PRO PRO',
+    detail:
+      'Restarts the computer at 102:27:00 into Apollo 11: the LM in its descent orbit 18 km above the Moon, the IMU aligned to the landing site, and the 1969 pre-launch erasable load. Then it clears the restart alarm and loads the autopilot data. The landing radar answers, but has no data.',
+    vehicle: 'LM',
+    setup: 'descent',
+  },
+  {
+    title: 'Start powered descent (P63)',
+    keys: 'V 3 7 E 6 3 E',
+    detail:
+      'After the setup. P63 works out when to light the engine (about 102:32:50). Answer it on the DSKY: V06 N61 PRO; V50 N25 00014 ENTER (no fine alignment); V50 N18 PRO, and ENTER when it flashes again; at 35 s to go, V99 PRO to enable the engine. The engine lights at minimum thrust, goes to full throttle 26 s later, and P64 starts at high gate, about 8 minutes into the burn. Use the speed menu to shorten the wait.',
     vehicle: 'LM',
   },
   {

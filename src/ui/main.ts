@@ -92,7 +92,17 @@ function renderCommands(vehicle: 'LM' | 'CM'): void {
 els.commands.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
   if (!btn) return;
-  typeKeys(parseKeys(COMMANDS[Number(btn.dataset.cmd)].keys));
+  const command = COMMANDS[Number(btn.dataset.cmd)];
+  if (command.setup === 'descent' && machine && program) {
+    const symbols = program.response.result.symbols;
+    machine.setUpDescent((name) => {
+      const symbol = symbols.find((s) => s.name === name);
+      if (!symbol) throw new Error(`no symbol ${name}`);
+      return symbol.value;
+    });
+    craft.attach(machine.lm, machine.agc, symbols.find((s) => s.name === 'IMODES33')?.value ?? -1);
+  }
+  typeKeys(parseKeys(command.keys));
   // On a narrow screen the DSKY is above the list: bring it back into view.
   if (window.matchMedia('(max-width: 900px)').matches) {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

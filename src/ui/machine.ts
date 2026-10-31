@@ -4,6 +4,7 @@
 
 import { AGC, MCT_PER_SECOND } from '../agc/cpu.ts';
 import { pressKey, releaseKey, type DskyKey } from '../agc/dsky.ts';
+import { descentState, loadDescent, prepareLunarModule, type AddressOf } from '../sim/descent.ts';
 import { LunarModule } from '../sim/lm.ts';
 
 /** Simulated time between queued keystrokes, so each KEYRUPT is fully handled. */
@@ -71,6 +72,20 @@ export class Machine {
     this.instrBase = 0;
     this.interruptRates.fill(0);
     this.instructionRate = 0;
+  }
+
+  /**
+   * Restart the computer into Apollo 11's pre-descent state (descent.ts): the
+   * LM's hardware first, then a fresh start that reads the IMU, then the
+   * erasable load and the LM's orbit.  `address` finds erasable symbols.
+   */
+  setUpDescent(address: AddressOf): void {
+    if (!this.lm) return;
+    this.reset();
+    const state = descentState();
+    prepareLunarModule(this.lm, state);
+    this.advance(Math.round(16 * MCT_PER_SECOND));
+    loadDescent(this.agc, this.lm, address, state);
   }
 
   /** Advance by the real time elapsed since the last frame. */

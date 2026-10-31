@@ -1,6 +1,7 @@
 // The LM panel: the RCS jets seen from above, the IMU gimbal angles and body
 // rates, the PGNS mode switch, the IMU switch, and a hand controller
-// (on-screen buttons or the keyboard).
+// (on-screen buttons or the keyboard).  In orbit it also shows the LM's true
+// altitude, speeds, thrust and propellant.
 
 import type { AGC } from '../agc/cpu.ts';
 import { DEG, type Vec3 } from '../sim/attitude.ts';
@@ -10,6 +11,8 @@ import { JETS, type LunarModule, type ModeControl } from '../sim/lm.ts';
 const STICK_NORMAL = 0.5;
 /** Keep a jet lit for at least this long so 14 ms firings are visible. */
 const JET_GLOW_MS = 140;
+/** The descent engine's rated thrust, 10,500 lbf: 100% on the LM's thrust meter. */
+const DPS_RATED = 10500 * 4.4482216;
 
 type StickInput = 'pitchUp' | 'pitchDown' | 'rollLeft' | 'rollRight' | 'yawLeft' | 'yawRight';
 
@@ -126,6 +129,8 @@ export class LmPanel {
     status: HTMLElement;
     gimbals: HTMLElement[];
     rates: HTMLElement[];
+    descent: HTMLElement;
+    descentValues: HTMLElement[];
     modes: HTMLButtonElement[];
     imu: HTMLInputElement;
   };
@@ -163,6 +168,16 @@ export class LmPanel {
           </div>
         </div>
       </div>
+      <div class="readout descent" hidden>
+        <span class="k">Descent <small>true values; the DSKY shows the computer's</small></span>
+        <div class="trio five">
+          <span><b>Altitude m</b><i class="mono" data-d="0">—</i></span>
+          <span><b>Vert m/s</b><i class="mono" data-d="1">—</i></span>
+          <span><b>Horiz m/s</b><i class="mono" data-d="2">—</i></span>
+          <span><b>Thrust %</b><i class="mono" data-d="3">—</i></span>
+          <span><b>Fuel kg</b><i class="mono" data-d="4">—</i></span>
+        </div>
+      </div>
       <div class="stick" aria-label="Hand controller: hold a button to turn">
         ${STICK_BUTTONS.map((b) => `<button type="button" class="ctl" data-stick="${b.input}" title="${b.title}">${b.label}</button>`).join('')}
         <button type="button" class="ctl kick" data-kick title="Give the LM a random turn and watch the autopilot stop it">Disturb</button>
@@ -172,6 +187,8 @@ export class LmPanel {
       status: host.querySelector('#craft-status')!,
       gimbals: [...host.querySelectorAll<HTMLElement>('[data-g]')],
       rates: [...host.querySelectorAll<HTMLElement>('[data-r]')],
+      descent: host.querySelector('.descent')!,
+      descentValues: [...host.querySelectorAll<HTMLElement>('[data-d]')],
       modes: [...host.querySelectorAll<HTMLButtonElement>('[data-mode]')],
       imu: host.querySelector('#craft-imu')!,
     };
@@ -241,12 +258,30 @@ export class LmPanel {
       if (this.glowUntil[j] > now) this.litJets |= 1 << j;
     }
     this.els.status.textContent = this.status();
+    this.els.descent.hidden = !lm.orbiting;
+    if (lm.orbiting) this.updateDescent(lm);
+  }
+
+  private updateDescent(lm: LunarModule): void {
+    const r = Math.hypot(...lm.position);
+    const up = lm.position.map((x) => x / r);
+    const vertical = lm.velocity.reduce((sum, v, k) => sum + v * up[k], 0);
+    const horizontal = Math.sqrt(Math.max(0, lm.velocity.reduce((sum, v) => sum + v * v, 0) - vertical * vertical));
+    const signed = (x: number, digits: number) => `${x < 0 ? '−' : '+'}${Math.abs(x).toFixed(digits)}`;
+    [
+      Math.round(r - lm.surfaceRadius).toLocaleString('en-US'),
+      signed(vertical, 1),
+      horizontal.toFixed(1),
+      ((100 * lm.engine.thrust) / DPS_RATED).toFixed(0),
+      Math.round(lm.engine.propellant).toLocaleString('en-US'),
+    ].forEach((text, i) => (this.els.descentValues[i].textContent = text));
   }
 
   private status(): string {
     const lm = this.lm!;
     const agc = this.agc!;
     const c = lm.controls;
+    if (lm.landed) return 'On the surface';
     if (!c.imuOperate) return 'IMU off: no attitude reference';
     if (!(agc.channels[0o30] & 0o20000)) return 'IMU turning on (90 s)';
     if (this.imodes33 >= 0 && agc.mem[this.imodes33] & 0o40) return 'Waiting for the IMU';

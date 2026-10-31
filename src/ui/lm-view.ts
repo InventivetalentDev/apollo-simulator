@@ -2,22 +2,34 @@
 // with a plume on each RCS jet while it fires. The scene axes are the
 // inertial axes, mapped as in scene-axes.ts, so the camera, the Sun, the Moon
 // and the stars stay still while the LM turns.
+//
+// In orbit the scene follows the LM instead: up is away from the Moon and
+// forward is along the ground track, the stars turn as the LM goes round,
+// the ground moves past below at the true rate, and the descent engine's
+// plume grows with its thrust.
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { cross, matrixToQuat, quatMultiply, type Quat, type Vec3 } from '../sim/attitude.ts';
+import { DPS_FULL_THROTTLE } from '../sim/descent-engine.ts';
 import type { LunarModule } from '../sim/lm.ts';
-import { buildLunarModule } from './lm-model.ts';
-import { quatToScene } from './scene-axes.ts';
+import { inertialToMoonFixed, moonFixedToInertial } from '../sim/moon.ts';
+import { buildLunarModule, FOOTPAD_DEPTH } from './lm-model.ts';
+import { quatToScene, toScene } from './scene-axes.ts';
 
 /** Direction of the Sun: high, on the camera's side, so the default view is lit. */
 const SUN = new THREE.Vector3(10, 6, 4).normalize();
 /**
  * The Moon's radius and the LM's height above it. Both are scaled down from
  * the real ones but keep the horizon about 25° below level, and they are large
- * enough that turning the camera around the LM shows no parallax.
+ * enough that turning the camera around the LM shows no parallax.  In orbit
+ * the height follows the true altitude at the Moon's scale (1:43), so the
+ * horizon sits as far below level as it really would.
  */
 const MOON_RADIUS = 40000;
 const ALTITUDE = 4000;
+/** One tile of the surface texture, m. */
+const TILE = 2500;
 /** Sine of the angle below level at which the Moon's horizon sits. */
 const HORIZON = -Math.sqrt(1 - (MOON_RADIUS / (MOON_RADIUS + ALTITUDE)) ** 2);
 const STAR_DISTANCE = 90000;
@@ -146,42 +158,76 @@ function moonTexture(random: () => number): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  // About 2.5 km per tile on the scaled Moon.
-  texture.repeat.set(100, 50);
   return texture;
 }
 
-function moon(random: () => number, anisotropy: number): THREE.Mesh {
-  const geometry = new THREE.SphereGeometry(MOON_RADIUS, 256, 128);
-  // Broad light and dark regions that span many tiles, so the tiling does not show.
-  const position = geometry.getAttribute('position');
-  const colors: number[] = [];
-  for (let i = 0; i < position.count; i++) {
-    const x = position.getX(i) / MOON_RADIUS;
-    const y = position.getY(i) / MOON_RADIUS;
-    const z = position.getZ(i) / MOON_RADIUS;
-    const shade = 0.84 + 0.12 * Math.sin(9 * x + 2.1) * Math.sin(7 * z + 0.4) + 0.08 * Math.sin(31 * y + 17 * z) * Math.sin(23 * x + 1.3);
-    colors.push(shade, shade, shade);
+/**
+ * The part of the Moon the LM can see, as a cap around the point straight
+ * below it: rings packed close under the LM and spreading out towards the
+ * horizon, so the ground near the LM is smooth at any height.  The texture is
+ * laid flat from above; moving its offset moves the ground.
+ */
+function moonCap(): THREE.BufferGeometry {
+  const rings = 160;
+  const segments = 256;
+  const reach = 1.2; // radians from the point below, well past the horizon
+  const positions = [0, MOON_RADIUS, 0];
+  for (let i = 1; i <= rings; i++) {
+    const angle = reach * (i / rings) ** 2;
+    for (let j = 0; j < segments; j++) {
+      const around = (2 * Math.PI * j) / segments;
+      positions.push(MOON_RADIUS * Math.sin(angle) * Math.cos(around), MOON_RADIUS * Math.cos(angle), MOON_RADIUS * Math.sin(angle) * Math.sin(around));
+    }
   }
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  const uvs: number[] = [];
+  const normals: number[] = [];
+  for (let k = 0; k < positions.length; k += 3) {
+    uvs.push(positions[k] / TILE, positions[k + 2] / TILE);
+    normals.push(positions[k] / MOON_RADIUS, positions[k + 1] / MOON_RADIUS, positions[k + 2] / MOON_RADIUS);
+  }
+  const index: number[] = [];
+  const at = (ring: number, j: number) => 1 + (ring - 1) * segments + (j % segments);
+  for (let j = 0; j < segments; j++) index.push(0, at(1, j + 1), at(1, j));
+  for (let i = 1; i < rings; i++) {
+    for (let j = 0; j < segments; j++) {
+      index.push(at(i, j), at(i, j + 1), at(i + 1, j), at(i, j + 1), at(i + 1, j + 1), at(i + 1, j));
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(index);
+  return geometry;
+}
+
+function moon(random: () => number, anisotropy: number): THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> {
   const map = moonTexture(random);
   map.anisotropy = anisotropy;
   // The Moon is lit by the Sun only, not by the moonshine meant for the LM.
-  const material = new THREE.MeshStandardMaterial({ map, vertexColors: true, roughness: 1, metalness: 0, envMapIntensity: 0 });
-  // Sample the tile a second time, about seven times larger and turned, and
-  // let it lighten and darken the first, so the repeat does not line up.
+  const material = new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0, envMapIntensity: 0 });
+  // Sample the tile twice more, about seven and forty times larger and
+  // turned, and let them lighten and darken the first, so the repeat does not
+  // line up and broad light and dark regions span many tiles.
   material.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <map_fragment>',
-      '#include <map_fragment>\n\tdiffuseColor.rgb *= 0.5 + 1.8 * texture2D( map, mat2( 0.12, 0.08, -0.08, 0.12 ) * vMapUv + vec2( 0.37, 0.71 ) ).g;',
+      '#include <map_fragment>\n\tdiffuseColor.rgb *= 0.5 + 1.8 * texture2D( map, mat2( 0.12, 0.08, -0.08, 0.12 ) * vMapUv + vec2( 0.37, 0.71 ) ).g;' +
+        '\n\tdiffuseColor.rgb *= 0.46 + 1.4 * texture2D( map, mat2( 0.02, -0.014, 0.014, 0.02 ) * vMapUv + vec2( 0.53, 0.19 ) ).g;',
     );
   };
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new THREE.Mesh(moonCap(), material);
   mesh.position.set(0, -(MOON_RADIUS + ALTITUDE), 0);
-  // Put the texture's equator, not its pole, under the LM.
-  mesh.rotation.z = Math.PI / 2;
+  mesh.receiveShadow = true;
   return mesh;
 }
+
+const conjugate = (q: Quat): Quat => [q[0], -q[1], -q[2], -q[3]];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unit = (a: Vec3): Vec3 => {
+  const n = Math.hypot(...a);
+  return [a[0] / n, a[1] / n, a[2] / n];
+};
 
 export class LmView {
   private lm: LunarModule | null = null;
@@ -191,6 +237,11 @@ export class LmView {
   private readonly controls!: OrbitControls;
   private readonly model!: THREE.Group;
   private readonly plumes: THREE.Object3D[] = [];
+  private readonly descentPlume!: THREE.Object3D;
+  private readonly moon!: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+  private readonly stars!: THREE.Points;
+  /** In orbit: the Moon-fixed direction of the point below the LM on the last frame. */
+  private below: Vec3 | null = null;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   /** False while the shaders compile in the background; nothing is drawn until then. */
   private ready = true;
@@ -244,11 +295,14 @@ export class LmView {
     this.scene.add(sun);
 
     const random = seeded(0x19690720);
-    this.scene.add(stars(random), moon(random, renderer.capabilities.getMaxAnisotropy()));
+    this.stars = stars(random);
+    this.moon = moon(random, renderer.capabilities.getMaxAnisotropy());
+    this.scene.add(this.stars, this.moon);
 
     const lm = buildLunarModule();
     this.model = lm.group;
     this.plumes = lm.plumes;
+    this.descentPlume = lm.descentPlume;
     this.scene.add(this.model);
 
     // Where the browser can compile shaders in the background, compile them
@@ -266,13 +320,27 @@ export class LmView {
   attach(lm: LunarModule | null): void {
     this.lm = lm;
     this.host.hidden = !lm;
+    this.below = null;
   }
 
   /** Draw one frame: the LM at its current attitude, with the jets in `litJets` (bit n-1 for jet n) firing. */
   update(litJets: number): void {
-    if (!this.ready || !this.lm || !this.renderer || this.host.hidden || document.visibilityState !== 'visible') return;
-    const [w, x, y, z] = quatToScene(this.lm.attitude);
-    this.model.quaternion.set(x, y, z, w);
+    const lm = this.lm;
+    if (!this.ready || !lm || !this.renderer || this.host.hidden || document.visibilityState !== 'visible') return;
+    const setQuat = (object: THREE.Object3D, q: Quat) => {
+      const [w, x, y, z] = quatToScene(q);
+      object.quaternion.set(x, y, z, w);
+    };
+    if (lm.orbiting) {
+      const frame = this.followOrbit(lm);
+      setQuat(this.model, quatMultiply(conjugate(frame), lm.attitude));
+      setQuat(this.stars, conjugate(frame));
+    } else {
+      setQuat(this.model, lm.attitude);
+      this.stars.quaternion.identity();
+      this.moon.position.y = -(MOON_RADIUS + ALTITUDE);
+      this.below = null;
+    }
     const steady = this.reducedMotion.matches;
     for (let j = 0; j < 16; j++) {
       const plume = this.plumes[j];
@@ -280,7 +348,52 @@ export class LmView {
       // A firing jet's plume flickers in length.
       if (plume.visible) plume.scale.set(1, steady ? 1 : 0.85 + 0.3 * Math.random(), 1);
     }
+    this.updateDescentPlume(lm, steady);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * In orbit: the local frame (simulation axes X up, Y right, Z forward along
+   * the ground track) as an attitude in the inertial frame.  Also sets the
+   * Moon's height below the LM and moves the ground by the distance flown.
+   */
+  private followOrbit(lm: LunarModule): Quat {
+    const up = unit(lm.position);
+    const forward = unit(lm.velocity.map((v, k) => v - dot(lm.velocity, up) * up[k]) as Vec3);
+    const right = cross(forward, up);
+    const frame = matrixToQuat([up[0], right[0], forward[0], up[1], right[1], forward[1], up[2], right[2], forward[2]]);
+
+    // The Moon at its scale, with the footpads just touching it at zero altitude.
+    const scale = MOON_RADIUS / lm.surfaceRadius;
+    const altitude = Math.max(0, Math.hypot(...lm.position) - lm.surfaceRadius);
+    this.moon.position.y = -(MOON_RADIUS + FOOTPAD_DEPTH + altitude * scale);
+
+    // The ground under the LM moves by the change in the Moon-fixed point below it.
+    const below = inertialToMoonFixed(up, lm.ephemerisTime);
+    if (this.below) {
+      const step = moonFixedToInertial(below.map((c, k) => c - this.below![k]) as Vec3, lm.ephemerisTime);
+      // A jump (a new setup) starts the ground afresh.
+      if (Math.hypot(...step) < 0.01) {
+        const offset = this.moon.material.map!.offset;
+        offset.x -= (dot(step, right) * MOON_RADIUS) / TILE;
+        offset.y += (dot(step, forward) * MOON_RADIUS) / TILE;
+      }
+    }
+    this.below = below;
+    return frame;
+  }
+
+  /** The descent engine's plume: shown while it fires, longer with more thrust, along the gimballed thrust line. */
+  private updateDescentPlume(lm: LunarModule, steady: boolean): void {
+    const plume = this.descentPlume;
+    const thrust = lm.engine.thrust / DPS_FULL_THROTTLE;
+    plume.visible = thrust > 0;
+    if (!plume.visible) return;
+    const [pitch, roll] = lm.engine.gimbal;
+    const exhaust: Vec3 = [-Math.cos(pitch) * Math.cos(roll), -Math.sin(roll), Math.sin(pitch) * Math.cos(roll)];
+    plume.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...toScene(exhaust)));
+    const width = 0.55 + 0.45 * thrust;
+    plume.scale.set(width, (0.3 + 0.7 * thrust) * (steady ? 1 : 0.93 + 0.14 * Math.random()), width);
   }
 }

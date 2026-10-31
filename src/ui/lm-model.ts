@@ -12,7 +12,15 @@ export interface LmModel {
   group: THREE.Group;
   /** One plume per jet, in jet order: plumes[j] belongs to jet j + 1. */
   plumes: THREE.Object3D[];
+  /** The descent engine's plume, at the bell's exit, opening along +y until turned. */
+  descentPlume: THREE.Object3D;
 }
+
+/** How far the footpads reach below the model's origin, m. */
+export const FOOTPAD_DEPTH = 4.1;
+
+/** Where the descent engine's bell ends, in scene axes. */
+export const DESCENT_BELL_EXIT = new THREE.Vector3(0, -3.4, 0);
 
 const Y = new THREE.Vector3(0, 1, 0);
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -167,7 +175,7 @@ export function buildLunarModule(): LmModel {
       new THREE.LatheGeometry([[0, -0.1], [0.3, -0.1], [0.44, -0.03], [0.47, 0.05], [0.43, 0.06], [0, 0]].map(([x, y]) => new THREE.Vector2(x, y)), 28),
       m.gold,
     );
-    pad.position.copy(foot).setY(-4.0);
+    pad.position.copy(foot).setY(0.1 - FOOTPAD_DEPTH);
     if (dz === 1) {
       // Ladder rails and rungs, just in front of the strut.
       const along = new THREE.Vector3().subVectors(foot, top);
@@ -260,11 +268,25 @@ export function buildLunarModule(): LmModel {
     plumes.push(plume);
   }
 
+  // The descent engine's exhaust is almost invisible in vacuum: a faint glow,
+  // brightest in the bell's mouth.
+  const descentPlume = new THREE.Group();
+  descentPlume.add(
+    ...[
+      { geometry: plumeCone(1.9, 6), material: glow(0xffc98a, 0.035) },
+      { geometry: plumeCone(1.2, 4.5), material: glow(0xffd9a8, 0.055) },
+      { geometry: plumeCone(0.75, 2.8), material: glow(0xffe2bd, 0.1) },
+      { geometry: plumeCone(0.55, 1.1), material: glow(0xffffff, 0.35) },
+    ].map(({ geometry, material }) => new THREE.Mesh(geometry, material)),
+  );
+  descentPlume.position.copy(DESCENT_BELL_EXIT);
+  descentPlume.visible = false;
+
   group.traverse((object) => {
     object.castShadow = true;
     object.receiveShadow = true;
   });
   // Plumes are light, not matter: added after the shadow pass above.
-  group.add(...plumes);
-  return { group, plumes };
+  group.add(...plumes, descentPlume);
+  return { group, plumes, descentPlume };
 }

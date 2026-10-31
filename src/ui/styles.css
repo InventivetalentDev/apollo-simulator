@@ -908,6 +908,12 @@ kbd {
   font-style: normal;
   font-size: 13px;
 }
+.trio.five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.descent[hidden] {
+  display: none;
+}
 .switches {
   display: flex;
   flex-wrap: wrap;
@@ -1016,6 +1022,9 @@ kbd {
 @media (max-width: 460px) {
   .craft-body {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .trio.five {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .jets {
     max-width: 200px;
