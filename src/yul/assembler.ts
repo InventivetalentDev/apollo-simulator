@@ -341,7 +341,9 @@ export function assemble(
     if (line.include || !line.fields.length) continue;
     if (line.s.length && !/\s/.test(line.s[0])) {
       const op = line.fields[1] ?? '';
-      if (op !== 'MEMORY' && op !== 'CHECK=') symbols.set(line.fields[0], null);
+      // "+1"-style location notes in column 1 are not symbols (operands like
+      // "+1" are always read as numbers), so leave them out of the table.
+      if (op !== 'MEMORY' && op !== 'CHECK=' && !isFalseLabel(line.fields[0])) symbols.set(line.fields[0], null);
     }
   }
   // Pseudo-symbols used by instruction aliases (RELINT = TC $3, and so on).

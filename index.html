@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="The Apollo Guidance Computer, running the original Apollo 11 flight software in your browser." />
+    <title>Apollo 11 Guidance Computer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <h1>Apollo Guidance Computer</h1>
+          <p>Apollo 11 flight software, assembled from the 1969 source and running in your browser</p>
+        </div>
+        <div class="program-switch" role="radiogroup" aria-label="Spacecraft">
+          <button type="button" role="radio" data-program="Luminary099" aria-checked="true">
+            <b>LM</b><span>Luminary 099</span>
+          </button>
+          <button type="button" role="radio" data-program="Comanche055" aria-checked="false">
+            <b>CM</b><span>Comanche 055</span>
+          </button>
+        </div>
+        <div class="run-controls">
+          <button type="button" id="run-toggle" class="ctl">Pause</button>
+          <button type="button" id="step" class="ctl" disabled>Step</button>
+          <label class="speed" for="speed">Speed
+            <select id="speed">
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="5">5×</option>
+              <option value="20">20×</option>
+              <option value="100">100×</option>
+            </select>
+          </label>
+          <button type="button" id="power" class="ctl" title="Power-cycle the computer: clear erasable memory and fresh start">Restart</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="left">
+          <div id="dsky-host"></div>
+          <section class="panel commands" aria-labelledby="commands-title">
+            <h2 id="commands-title">Try it</h2>
+            <p class="hint">Click a command to key it into the DSKY, or type on your keyboard: digits, <kbd>V</kbd>erb, <kbd>N</kbd>oun, <kbd>Enter</kbd>, <kbd>C</kbd>lear, <kbd>P</kbd>ro, <kbd>K</kbd>ey&nbsp;rel, <kbd>R</kbd>eset.</p>
+            <ul id="command-list"></ul>
+          </section>
+          <section class="panel about" aria-labelledby="about-title">
+            <h2 id="about-title">What you are looking at</h2>
+            <ul>
+              <li>The DSKY was the crew's keyboard and display. Every lamp and digit here is set by the original 1969 software, through the same I/O channels the real hardware used.</li>
+              <li>The listing is the actual Apollo 11 source. Your browser assembles it into the 36 banks of core rope, and an emulated Block II computer runs it at 85,333 memory cycles a second.</li>
+              <li>The spacecraft around the computer is not simulated yet: no IMU, radar, engines or hand controllers. Guidance programs such as P63, the powered descent, wait for sensor data that never arrives.</li>
+            </ul>
+          </section>
+        </section>
+
+        <section class="right">
+          <section class="panel cpu" aria-label="Computer state">
+            <div class="cpu-grid">
+              <div class="stat wide">
+                <span class="k">Running</span>
+                <span class="v" id="cpu-routine">—</span>
+                <span class="sub" id="cpu-location">—</span>
+              </div>
+              <div class="stat"><span class="k">Clock</span><span class="v mono" id="cpu-time">000:00:00</span></div>
+              <div class="stat"><span class="k">Z</span><span class="v mono" id="reg-z">—</span></div>
+              <div class="stat"><span class="k">A</span><span class="v mono" id="reg-a">—</span></div>
+              <div class="stat"><span class="k">L</span><span class="v mono" id="reg-l">—</span></div>
+              <div class="stat"><span class="k">Q</span><span class="v mono" id="reg-q">—</span></div>
+              <div class="stat"><span class="k">BB</span><span class="v mono" id="reg-bb">—</span></div>
+            </div>
+            <div class="cpu-row">
+              <div class="chips" id="cpu-chips"></div>
+              <div class="rupts" id="cpu-rupts" aria-label="Interrupts per second"></div>
+            </div>
+          </section>
+
+          <section class="panel source" aria-label="Source code">
+            <div class="source-head">
+              <label class="visually-hidden" for="source-file">Source file</label>
+              <select id="source-file"></select>
+              <div class="search">
+                <label class="visually-hidden" for="source-search">Jump to label</label>
+                <input id="source-search" list="source-symbols" placeholder="Jump to label, e.g. BURNBABY" autocomplete="off" spellcheck="false" />
+                <datalist id="source-symbols"></datalist>
+                <span id="source-search-status" role="status"></span>
+              </div>
+              <label class="follow" for="follow">Follow
+                <select id="follow">
+                  <option value="jobs" selected>Jobs</option>
+                  <option value="all">Every instruction</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+            </div>
+            <div class="code-scroll" tabindex="0" aria-label="Listing">
+              <div class="code-spacer"></div>
+              <div class="code-rows"></div>
+              <div class="loading" id="loading">
+                <div class="loading-box">
+                  <div class="spinner" aria-hidden="true"></div>
+                  <p id="loading-text">Loading the original source…</p>
+                </div>
+              </div>
+            </div>
+            <footer class="source-foot" id="assembly-status">—</footer>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/ui/main.ts"></script>
+  </body>
+</html>

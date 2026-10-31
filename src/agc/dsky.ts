@@ -1,7 +1,7 @@
 // The DSKY (display and keyboard) as the AGC sees it: relay words written to
 // channel 10, status bits in channel 11, and five-bit key codes in channel 15.
 
-import { AGC, MCT_PER_SECOND } from './cpu.ts';
+import { AGC } from './cpu.ts';
 
 export const KEY_CODES = {
   '0': 0o20,
@@ -133,5 +133,3 @@ export function releaseKey(agc: AGC, key: DskyKey): void {
   if (key === 'PRO') agc.setInputChannel(0o32, agc.channels[0o32] | 0o20000);
 }
 
-/** The PRO button is sampled every 120 ms, so it must be held at least that long. */
-export const PRO_HOLD_MCT = Math.round(0.25 * MCT_PER_SECOND);

@@ -154,6 +154,8 @@ export class AGC {
   extraCode = false;
   allowInterrupt = true;
   inIsr = false;
+  /** The interrupt being serviced (1-10), or 0. */
+  isr = 0;
   substituteInstruction = false;
   indexValue = 0;
   pendFlag = false;
@@ -182,8 +184,16 @@ export class AGC {
 
   /** Rope index (bank*1024+offset) of the last instruction fetched from fixed memory, or -1. */
   lastRopeIndex = -1;
+  /** Like lastRopeIndex, but only for job code: outside interrupts, with the COMP ACTY lamp on. */
+  lastJobRopeIndex = -1;
   /** Executions per rope word, for showing which code has run. */
   readonly execCounts = new Uint32Array(FIXED_WORDS);
+  /**
+   * Optional hints for lastJobRopeIndex: skip the Executive's own dispatching
+   * code, and inside the interpreter report the interpretive instruction (from
+   * the job's LOC and BANKSET registers) instead of the interpreter itself.
+   */
+  jobTracker: { exclude: Uint8Array; interpreter: Uint8Array; locAddress: number; banksetAddress: number } | null = null;
   /** Called whenever the software writes an output channel. */
   onChannelWrite: ((channel: number, value: number) => void) | null = null;
   /** Called on each hardware restart, with the channel 77 alarm bits. */
@@ -214,6 +224,7 @@ export class AGC {
     this.extraCode = false;
     this.allowInterrupt = true;
     this.inIsr = false;
+    this.isr = 0;
     this.substituteInstruction = false;
     this.indexValue = 0;
     this.pendFlag = false;
@@ -232,6 +243,7 @@ export class AGC {
     this.downlinkWritten = 0;
     this.tookBZF = this.tookBZMF = false;
     this.lastRopeIndex = -1;
+    this.lastJobRopeIndex = -1;
     this.execCounts.fill(0);
     this.interruptCounts.fill(0);
   }
@@ -410,6 +422,7 @@ export class AGC {
     this.mem[REG.Z] = 0o4000;
     this.nextZ = 0o4000;
     this.inIsr = false;
+    this.isr = 0;
     this.allowInterrupt = true;
     this.interruptRequests.fill(false);
     // Output channels are cleared; the DSKY's latching relays keep their state.
@@ -575,6 +588,7 @@ export class AGC {
           this.interruptRequests[i] = false;
           this.nextZ = 0o4000 + 4 * i;
           this.interruptCounts[i]++;
+          this.isr = i;
           taken = true;
           break;
         }
@@ -612,6 +626,7 @@ export class AGC {
     if (where >= FIXED_BASE) {
       const r = where - FIXED_BASE;
       this.lastRopeIndex = r;
+      if (!this.inIsr && this.channels[0o11] & 2) this.trackJob(r);
       this.execCounts[r]++;
     }
     this.indexValue = 0;
@@ -1166,9 +1181,28 @@ export class AGC {
     this.finish(currentEB, currentFB, currentBB, keepExtraCode, executedTC, tcTransient, justTookBZF, justTookBZMF);
   }
 
+  private trackJob(r: number): void {
+    const t = this.jobTracker;
+    if (!t) {
+      this.lastJobRopeIndex = r;
+    } else if (t.interpreter[r]) {
+      const loc = (this.mem[t.locAddress] - 1) & 0o7777;
+      if (loc >= 0o4000) {
+        this.lastJobRopeIndex = loc;
+      } else if (loc >= 0o2000) {
+        let bank = (this.mem[t.banksetAddress] >> 10) & 0o37;
+        if ((bank & 0o30) === 0o30 && this.outputChannel7 & 0o100) bank += 0o10;
+        this.lastJobRopeIndex = bank * 0o2000 + (loc & 0o1777);
+      }
+    } else if (!t.exclude[r]) {
+      this.lastJobRopeIndex = r;
+    }
+  }
+
   private resume(): void {
     this.nextZ = this.mem[REG.ZRUPT] - 1;
     this.inIsr = false;
+    this.isr = 0;
     this.substituteInstruction = true;
   }
 
