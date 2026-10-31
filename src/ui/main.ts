@@ -6,6 +6,7 @@ import { ropeHash } from '../yul/rope-hash.ts';
 import { assembleSources, type AssembleResponse } from './assemble-sources.ts';
 import { COMMANDS, displayKeys, parseKeys } from './commands.ts';
 import { DskyView, KEYBOARD_MAP } from './dsky-view.ts';
+import { LmPanel } from './lm-panel.ts';
 import { Machine } from './machine.ts';
 import { formatAddress, ropeIndexOf, SourceView, type SourceLinker } from './source-view.ts';
 
@@ -60,6 +61,8 @@ const dsky = new DskyView($('#dsky-host'), {
   },
 });
 
+const craft = new LmPanel($('#craft'));
+
 const source = new SourceView($('.source'), {
   onUserNavigate: () => {
     if (els.follow.value !== 'off') els.follow.value = 'off';
@@ -75,11 +78,14 @@ function typeKeys(keys: DskyKey[]): void {
 
 // ---- Commands
 
-els.commands.innerHTML = COMMANDS.map(
-  (c, i) =>
-    `<li><button type="button" class="cmd" data-cmd="${i}"><span class="title">${c.title}</span>` +
-    `<span class="keys">${displayKeys(c.keys)}</span><span class="detail">${c.detail}</span></button></li>`,
-).join('');
+function renderCommands(vehicle: 'LM' | 'CM'): void {
+  els.commands.innerHTML = COMMANDS.map((c, i) =>
+    c.vehicle && c.vehicle !== vehicle
+      ? ''
+      : `<li><button type="button" class="cmd${c.keys.length > 24 ? ' long' : ''}" data-cmd="${i}"><span class="title">${c.title}</span>` +
+        `<span class="keys">${displayKeys(c.keys)}</span><span class="detail">${c.detail}</span></button></li>`,
+  ).join('');
+}
 els.commands.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
   if (!btn) return;
@@ -214,7 +220,9 @@ async function loadProgram(id: string): Promise<void> {
     btn.setAttribute('aria-checked', String(btn.dataset.program === id));
   }
   machine = null;
+  craft.attach(null, null);
   dsky.setVehicle(info.vehicle);
+  renderCommands(info.vehicle);
   let loaded = cache.get(id);
   if (!loaded) {
     els.loading.hidden = false;
@@ -252,8 +260,9 @@ async function loadProgram(id: string): Promise<void> {
   );
   els.loading.hidden = true;
   showAssemblyStatus(loaded);
-  machine = new Machine(response.result.rope);
+  machine = new Machine(response.result.rope, info.vehicle);
   machine.agc.jobTracker = loaded.jobTracker;
+  craft.attach(machine.lm, machine.agc, response.result.symbols.find((s) => s.name === 'IMODES33')?.value ?? -1);
   machine.speed = Number(els.speed.value);
   setRunning(true);
   try {
@@ -399,6 +408,7 @@ function frame(now: number): void {
   if (machine) {
     machine.frame(now);
     dsky.update(readDsky(machine.agc));
+    craft.update(now);
     refreshPanels();
   }
   requestAnimationFrame(frame);

@@ -1,8 +1,10 @@
 // Runs the AGC in real time (or faster), feeds it DSKY keystrokes at a
-// human pace, and keeps simple statistics for the UI.
+// human pace, and keeps simple statistics for the UI.  For the LM program the
+// computer is wired to a simulated Lunar Module.
 
 import { AGC, MCT_PER_SECOND } from '../agc/cpu.ts';
 import { pressKey, releaseKey, type DskyKey } from '../agc/dsky.ts';
+import { LunarModule } from '../sim/lm.ts';
 
 /** Simulated time between queued keystrokes, so each KEYRUPT is fully handled. */
 const KEY_GAP_MCT = Math.round(0.14 * MCT_PER_SECOND);
@@ -13,6 +15,8 @@ const MAX_FRAME_SECONDS = 0.1;
 
 export class Machine {
   readonly agc: AGC;
+  /** The spacecraft around the computer (LM only for now). */
+  readonly lm: LunarModule | null = null;
   running = true;
   speed = 1;
   private lastNow = 0;
@@ -28,8 +32,12 @@ export class Machine {
   instructionRate = 0;
   private instrBase = 0;
 
-  constructor(rope: Uint16Array) {
+  constructor(rope: Uint16Array, vehicle: 'LM' | 'CM') {
     this.agc = new AGC(rope);
+    if (vehicle === 'LM') {
+      this.lm = new LunarModule(this.agc);
+      this.agc.peripheral = this.lm;
+    }
   }
 
   /** Queue a keystroke (or a sequence) to be typed at human speed. */
@@ -54,6 +62,7 @@ export class Machine {
 
   reset(): void {
     this.agc.reset();
+    this.lm?.computerReset();
     this.queue = [];
     this.nextKeyAt = 0;
     this.proReleaseAt = 0;

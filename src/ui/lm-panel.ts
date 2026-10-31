@@ -1,0 +1,304 @@
+// The LM panel: the RCS jets seen from above, the IMU gimbal angles and body
+// rates, the PGNS mode switch, the IMU switch, and a hand controller
+// (on-screen buttons or the keyboard).
+
+import type { AGC } from '../agc/cpu.ts';
+import { DEG, type Vec3 } from '../sim/attitude.ts';
+import { JETS, type LunarModule, type ModeControl } from '../sim/lm.ts';
+
+/** Stick deflection for a held key or button; Shift gives full deflection. */
+const STICK_NORMAL = 0.5;
+/** Keep a jet lit for at least this long so 14 ms firings are visible. */
+const JET_GLOW_MS = 140;
+
+type StickInput = 'pitchUp' | 'pitchDown' | 'rollLeft' | 'rollRight' | 'yawLeft' | 'yawRight';
+
+/** Stick axis (0 = X/yaw, 1 = Y/pitch, 2 = Z/roll) and sign for each input. */
+const STICK_AXES: Record<StickInput, [number, 1 | -1]> = {
+  pitchUp: [1, 1],
+  pitchDown: [1, -1],
+  rollLeft: [2, -1],
+  rollRight: [2, 1],
+  yawLeft: [0, 1],
+  yawRight: [0, -1],
+};
+
+const STICK_KEYS: Record<string, StickInput> = {
+  ArrowDown: 'pitchUp', // pull back: nose up
+  ArrowUp: 'pitchDown',
+  ArrowLeft: 'rollLeft',
+  ArrowRight: 'rollRight',
+  a: 'yawLeft',
+  d: 'yawRight',
+};
+
+const STICK_BUTTONS: { input: StickInput; label: string; title: string }[] = [
+  { input: 'pitchUp', label: 'Pitch ▲', title: 'Nose up (↓ key)' },
+  { input: 'pitchDown', label: 'Pitch ▼', title: 'Nose down (↑ key)' },
+  { input: 'rollLeft', label: 'Roll ◀', title: 'Roll left (← key)' },
+  { input: 'rollRight', label: 'Roll ▶', title: 'Roll right (→ key)' },
+  { input: 'yawLeft', label: 'Yaw ↺', title: 'Yaw left (A key)' },
+  { input: 'yawRight', label: 'Yaw ↻', title: 'Yaw right (D key)' },
+];
+
+const MODES: { mode: ModeControl; label: string }[] = [
+  { mode: 'off', label: 'Off' },
+  { mode: 'attHold', label: 'Att hold' },
+  { mode: 'auto', label: 'Auto' },
+];
+
+// ---- The jet diagram: the LM from above, forward (+Z) up the page, +Y to the right.
+
+const QUAD = 52; // quad distance from the centre along Y and Z, in diagram units
+const PLUME = 26;
+
+function jetDiagram(): string {
+  const base = [
+    '<polygon class="hull" points="-30,-40 30,-40 44,-22 44,28 30,40 -30,40 -44,28 -44,-22" />',
+    '<rect class="hatch" x="-10" y="-46" width="20" height="8" rx="2" />',
+    '<text class="axis" x="0" y="-86" text-anchor="middle">FWD +Z</text>',
+    '<text class="axis" x="96" y="4" text-anchor="end">+Y</text>',
+  ];
+  const quads: string[] = [];
+  for (const [y, z, n] of [
+    [1, 1, '1–4'],
+    [1, -1, '5–8'],
+    [-1, -1, '9–12'],
+    [-1, 1, '13–16'],
+  ] as const) {
+    quads.push(`<rect class="quad" x="${y * QUAD - 13}" y="${-z * QUAD - 13}" width="26" height="26" rx="4" />`);
+    quads.push(`<text class="quad-label" x="${y * (QUAD + 24)}" y="${-z * (QUAD + 28) + 4}" text-anchor="middle">${n}</text>`);
+  }
+  const jets: string[] = [];
+  for (const jet of JETS) {
+    const qy = Math.sign(jet.position[1]) * QUAD;
+    const qz = -Math.sign(jet.position[2]) * QUAD; // screen y grows downwards
+    const [fx, fy, fz] = jet.force;
+    const kind = fx ? (fx > 0 ? 'down-firing' : 'up-firing') : 'horizontal';
+    const title = `<title>Jet ${jet.number}, ${kind}</title>`;
+    if (fx) {
+      // Up- and down-firing jets: two dots on the quad's diagonal.
+      const out = fx < 0 ? 7 : -7;
+      const cx = qy + Math.sign(qy) * out;
+      const cy = qz + Math.sign(qz) * out;
+      jets.push(`<g class="jet vjet" data-jet="${jet.number - 1}">${title}<circle cx="${cx}" cy="${cy}" r="5.5" /></g>`);
+    } else {
+      // Horizontal jets: a nozzle and a plume along the exhaust, opposite to the force.
+      const ex = -fy;
+      const ey = fz; // exhaust along -Z is down the page
+      const nx = qy + ex * 16;
+      const ny = qz + ey * 16;
+      const px = nx + ex * PLUME;
+      const py = ny + ey * PLUME;
+      const w = 7;
+      const plume = ex ? `${nx},${ny - w} ${px},${py} ${nx},${ny + w}` : `${nx - w},${ny} ${px},${py} ${nx + w},${ny}`;
+      jets.push(
+        `<g class="jet hjet" data-jet="${jet.number - 1}">${title}<polygon class="plume" points="${plume}" />` +
+          `<line x1="${qy}" y1="${qz}" x2="${nx}" y2="${ny}" /></g>`,
+      );
+    }
+  }
+  return `<svg class="jets" viewBox="-100 -100 200 200" role="img" aria-label="RCS jets seen from above; lit jets are firing">${[...base, ...quads, ...jets].join('')}</svg>`;
+}
+
+/** Gimbal angle as the DSKY shows it in noun 20: 000.00 to 359.99 degrees. */
+const fmtAngle = (rad: number) => {
+  const hundredths = ((Math.round((rad / DEG) * 100) % 36000) + 36000) % 36000;
+  return (hundredths / 100).toFixed(2).padStart(6, '0');
+};
+const fmtRate = (rad: number) => {
+  const hundredths = Math.round((rad / DEG) * 100);
+  return `${hundredths < 0 ? '−' : '+'}${(Math.abs(hundredths) / 100).toFixed(2)}`;
+};
+
+export class LmPanel {
+  private lm: LunarModule | null = null;
+  private agc: AGC | null = null;
+  private imodes33 = -1;
+  private readonly held = new Set<StickInput>();
+  private full = false;
+  private readonly jetEls: SVGGElement[] = [];
+  private readonly glowUntil = new Float64Array(16);
+  private readonly lastJetSeconds = new Float64Array(16);
+  private readonly els: {
+    status: HTMLElement;
+    gimbals: HTMLElement[];
+    rates: HTMLElement[];
+    modes: HTMLButtonElement[];
+    imu: HTMLInputElement;
+  };
+
+  constructor(readonly host: HTMLElement) {
+    host.innerHTML = `
+      <div class="craft-head">
+        <h2 id="craft-title">Lunar Module</h2>
+        <span class="craft-status" id="craft-status" role="status">—</span>
+      </div>
+      <div class="craft-body">
+        ${jetDiagram()}
+        <div class="craft-read">
+          <div class="readout">
+            <span class="k">IMU gimbals <small>deg</small></span>
+            <div class="trio">
+              <span><b>OG</b><i class="mono" data-g="0">—</i></span>
+              <span><b>IG</b><i class="mono" data-g="1">—</i></span>
+              <span><b>MG</b><i class="mono" data-g="2">—</i></span>
+            </div>
+          </div>
+          <div class="readout">
+            <span class="k">Body rates <small>deg/s</small></span>
+            <div class="trio">
+              <span><b>Yaw</b><i class="mono" data-r="0">—</i></span>
+              <span><b>Pitch</b><i class="mono" data-r="1">—</i></span>
+              <span><b>Roll</b><i class="mono" data-r="2">—</i></span>
+            </div>
+          </div>
+          <div class="switches">
+            <div class="seg" role="radiogroup" aria-label="PGNS mode control">
+              ${MODES.map((m) => `<button type="button" role="radio" data-mode="${m.mode}" aria-checked="false">${m.label}</button>`).join('')}
+            </div>
+            <label class="toggle"><input type="checkbox" id="craft-imu" checked /> IMU operate</label>
+          </div>
+        </div>
+      </div>
+      <div class="stick" aria-label="Hand controller: hold a button to turn">
+        ${STICK_BUTTONS.map((b) => `<button type="button" class="ctl" data-stick="${b.input}" title="${b.title}">${b.label}</button>`).join('')}
+        <button type="button" class="ctl kick" data-kick title="Give the LM a random turn and watch the autopilot stop it">Disturb</button>
+      </div>
+      <p class="hint">Keys: <kbd>↑</kbd><kbd>↓</kbd> pitch, <kbd>←</kbd><kbd>→</kbd> roll, <kbd>A</kbd><kbd>D</kbd> yaw, <kbd>Shift</kbd> full stick.</p>`;
+    this.els = {
+      status: host.querySelector('#craft-status')!,
+      gimbals: [...host.querySelectorAll<HTMLElement>('[data-g]')],
+      rates: [...host.querySelectorAll<HTMLElement>('[data-r]')],
+      modes: [...host.querySelectorAll<HTMLButtonElement>('[data-mode]')],
+      imu: host.querySelector('#craft-imu')!,
+    };
+    for (const g of host.querySelectorAll<SVGGElement>('.jet')) this.jetEls[Number(g.dataset.jet)] = g;
+
+    host.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const mode = target.closest<HTMLElement>('[data-mode]')?.dataset.mode as ModeControl | undefined;
+      if (mode && this.lm) {
+        this.lm.controls.mode = mode;
+        this.syncSwitches();
+      }
+      if (target.closest('[data-kick]')) this.kick();
+    });
+    this.els.imu.addEventListener('change', () => {
+      if (this.lm) this.lm.controls.imuOperate = this.els.imu.checked;
+    });
+    host.addEventListener('pointerdown', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-stick]');
+      if (!btn) return;
+      btn.setPointerCapture(e.pointerId);
+      this.full = e.shiftKey;
+      this.hold(btn.dataset.stick as StickInput, true);
+    });
+    const release = (e: PointerEvent) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-stick]');
+      if (btn) this.hold(btn.dataset.stick as StickInput, false);
+    };
+    host.addEventListener('pointerup', release);
+    host.addEventListener('pointercancel', release);
+
+    document.addEventListener('keydown', (e) => this.onKey(e, true));
+    document.addEventListener('keyup', (e) => this.onKey(e, false));
+    window.addEventListener('blur', () => {
+      this.held.clear();
+      this.applyStick();
+    });
+  }
+
+  /** Show the panel for an LM (with the address of IMODES33, for the IMU status), or hide it. */
+  attach(lm: LunarModule | null, agc: AGC | null, imodes33Address = -1): void {
+    this.lm = lm;
+    this.agc = agc;
+    this.imodes33 = imodes33Address;
+    this.host.hidden = !lm;
+    this.held.clear();
+    this.lastJetSeconds.fill(0);
+    this.glowUntil.fill(0);
+    if (lm) {
+      this.applyStick();
+      this.syncSwitches();
+    }
+  }
+
+  update(now: number): void {
+    const lm = this.lm;
+    if (!lm || !this.agc) return;
+    const g = lm.gimbals;
+    [g.outer, g.inner, g.middle].forEach((a, i) => (this.els.gimbals[i].textContent = fmtAngle(a)));
+    lm.rate.forEach((r, i) => (this.els.rates[i].textContent = fmtRate(r)));
+    for (let j = 0; j < 16; j++) {
+      if (lm.jetSeconds[j] > this.lastJetSeconds[j] || lm.jets & (1 << j)) this.glowUntil[j] = now + JET_GLOW_MS;
+      this.lastJetSeconds[j] = lm.jetSeconds[j];
+      this.jetEls[j]?.classList.toggle('on', this.glowUntil[j] > now);
+    }
+    this.els.status.textContent = this.status();
+  }
+
+  private status(): string {
+    const lm = this.lm!;
+    const agc = this.agc!;
+    const c = lm.controls;
+    if (!c.imuOperate) return 'IMU off: no attitude reference';
+    if (!(agc.channels[0o30] & 0o20000)) return 'IMU turning on (90 s)';
+    if (this.imodes33 >= 0 && agc.mem[this.imodes33] & 0o40) return 'Waiting for the IMU';
+    if (c.mode === 'off') return 'Autopilot off';
+    return c.mode === 'auto' ? 'Autopilot: auto' : 'Autopilot: attitude hold';
+  }
+
+  private syncSwitches(): void {
+    const lm = this.lm;
+    if (!lm) return;
+    for (const b of this.els.modes) b.setAttribute('aria-checked', String(b.dataset.mode === lm.controls.mode));
+    this.els.imu.checked = lm.controls.imuOperate;
+  }
+
+  private kick(): void {
+    if (!this.lm) return;
+    const axis = Math.floor(Math.random() * 3);
+    const rate: Vec3 = [...this.lm.rate];
+    rate[axis] += (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random()) * DEG;
+    this.lm.rate = rate;
+  }
+
+  private onKey(e: KeyboardEvent, down: boolean): void {
+    if (!this.lm || this.host.hidden) return;
+    const input = STICK_KEYS[e.key] ?? STICK_KEYS[e.key.toLowerCase()];
+    if (!input) {
+      if (e.key === 'Shift') {
+        this.full = down;
+        this.applyStick();
+      }
+      return;
+    }
+    // A press in a text field or the listing is not for the stick; a release always is.
+    const target = e.target as HTMLElement;
+    if (down && (target.closest('input, select, textarea, .source') || e.metaKey || e.ctrlKey || e.altKey)) return;
+    e.preventDefault();
+    this.full = e.shiftKey;
+    this.hold(input, down);
+  }
+
+  private hold(input: StickInput, down: boolean): void {
+    if (down) this.held.add(input);
+    else this.held.delete(input);
+    for (const b of this.host.querySelectorAll<HTMLElement>('[data-stick]')) {
+      b.classList.toggle('held', this.held.has(b.dataset.stick as StickInput));
+    }
+    this.applyStick();
+  }
+
+  private applyStick(): void {
+    if (!this.lm) return;
+    const stick: Vec3 = [0, 0, 0];
+    const amount = this.full ? 1 : STICK_NORMAL;
+    for (const input of this.held) {
+      const [axis, sign] = STICK_AXES[input];
+      stick[axis] += sign * amount;
+    }
+    this.lm.controls.stick = stick;
+  }
+}

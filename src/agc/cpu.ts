@@ -3,8 +3,8 @@
 // The model follows the hardware closely enough to run the unmodified flight
 // software: 15-bit ones'-complement words, 16-bit A/L/Q registers that carry
 // an overflow bit, banked erasable and fixed memory, the extracode
-// instructions, interrupts, the timer counters TIME1-TIME6, I/O channels, and
-// the hardware alarms (night watchman, rupt lock, TC trap) that force a
+// instructions, interrupts, the timer counters TIME1-TIME6, the output
+// ("drive") counters, I/O channels, and the hardware alarms (night watchman, rupt lock, TC trap) that force a
 // restart when the software stops behaving.
 //
 // Timing is counted in memory cycles (MCT, 11.72 microseconds); `step()`
@@ -49,7 +49,19 @@ export const REG = {
   PIPAX: 0o37,
   PIPAY: 0o40,
   PIPAZ: 0o41,
+  // In the LM these three count hand-controller deflection (the CM uses them for its gyro assembly).
+  RHCQ: 0o42,
+  RHCP: 0o43,
+  RHCR: 0o44,
   INLINK: 0o45,
+  RNRAD: 0o46,
+  GYROCMD: 0o47,
+  CDUXCMD: 0o50,
+  CDUYCMD: 0o51,
+  CDUZCMD: 0o52,
+  CDUTCMD: 0o53,
+  CDUSCMD: 0o54,
+  THRUST: 0o55,
   NEWJOB: 0o67,
 } as const;
 
@@ -130,6 +142,33 @@ function spToDecent(msb: number, lsb: number): number {
   return v;
 }
 
+/**
+ * Output counters: while its channel 14 bit is set, the hardware counts the
+ * register towards zero and sends one pulse per count to the spacecraft
+ * hardware, then clears the bit.  [register, channel 14 bit, scaler ticks per pulse]
+ * Gyro and thrust pulses go out at 3200 a second (the gyro-torquing routine
+ * waits pulses/32 centiseconds).  The CDU drives run at 800 a second; the
+ * coarse-align routine allows 600 ms for its at most 192 pulses.
+ */
+const DRIVE_COUNTERS: readonly (readonly [number, number, number])[] = [
+  [REG.CDUXCMD, 0o40000, 4],
+  [REG.CDUYCMD, 0o20000, 4],
+  [REG.CDUZCMD, 0o10000, 4],
+  [REG.CDUTCMD, 0o4000, 4],
+  [REG.CDUSCMD, 0o2000, 4],
+  [REG.GYROCMD, 0o1000, 1],
+  [REG.THRUST, 0o10, 1],
+];
+const DRIVE_BITS = DRIVE_COUNTERS.reduce((bits, [, bit]) => bits | bit, 0);
+
+/** Spacecraft hardware wired to the computer: the IMU, jets, engine, radars, panel switches. */
+export interface Peripheral {
+  /** Called on every scaler tick, 3200 times a simulated second. */
+  tick(): void;
+  /** One pulse from an output counter (REG.CDUXCMD, REG.GYROCMD, REG.THRUST, ...), +1 or -1. */
+  pulse(register: number, direction: 1 | -1): void;
+}
+
 export interface CpuSnapshot {
   mem: Uint16Array;
   channels: Uint16Array;
@@ -198,6 +237,8 @@ export class AGC {
   onChannelWrite: ((channel: number, value: number) => void) | null = null;
   /** Called on each hardware restart, with the channel 77 alarm bits. */
   onRestart: ((alarms: number) => void) | null = null;
+  /** The spacecraft around the computer, if any. */
+  peripheral: Peripheral | null = null;
 
   constructor(rope?: Uint16Array) {
     if (rope) this.loadRope(rope);
@@ -500,10 +541,31 @@ export class AGC {
         this.cpuWriteIO(0o13, ch[0o13] & 0o37777);
       }
     }
+    if (ch[0o14] & DRIVE_BITS) this.driveOutputs(s);
+    this.peripheral?.tick();
 
     if (alarm && this.alarmsEnabled) {
       ch[0o77] |= alarm;
       this.gojam(alarm);
+    }
+  }
+
+  /** Empty the output counters whose channel 14 bits are set, one pulse at a time. */
+  private driveOutputs(s: number): void {
+    const ch14 = this.channels[0o14];
+    for (const [reg, bit, every] of DRIVE_COUNTERS) {
+      if (!(ch14 & bit) || s & (every - 1)) continue;
+      this.extraDelay++;
+      const v = this.mem[reg];
+      if (v === 0 || v === 0o77777) {
+        this.channels[0o14] &= ~bit; // the count is out: the hardware drops the enable bit
+        continue;
+      }
+      const negative = (v & 0o40000) !== 0;
+      this.mem[reg] = negative ? v + 1 : v - 1;
+      // Gyro commands are always positive; channel 14 bit 9 gives the direction.
+      const reverse = reg === REG.GYROCMD && (ch14 & 0o400) !== 0;
+      this.peripheral?.pulse(reg, negative !== reverse ? -1 : 1);
     }
   }
 

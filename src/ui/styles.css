@@ -438,6 +438,11 @@ kbd {
   color: var(--el);
   white-space: nowrap;
 }
+.cmd.long .keys {
+  grid-column: 1 / -1;
+  justify-self: start;
+  white-space: normal;
+}
 .cmd .detail {
   grid-column: 1 / -1;
   color: var(--muted);
@@ -760,6 +765,183 @@ kbd {
   }
 }
 
+/* ---- Lunar Module panel: jets seen from above, gimbals, rates, switches, hand controller */
+.craft {
+  padding: 12px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.craft[hidden] {
+  display: none;
+}
+.craft-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.craft-status {
+  color: var(--el);
+  font: 500 13px var(--font-mono);
+  text-align: right;
+}
+.craft-body {
+  display: grid;
+  grid-template-columns: minmax(120px, 146px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+.jets {
+  width: 100%;
+  height: auto;
+}
+.jets .hull {
+  fill: var(--panel-raised);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+.jets .hatch {
+  fill: var(--line);
+}
+.jets .axis,
+.jets .quad-label {
+  fill: var(--muted);
+  font: 500 9px var(--font-mono);
+}
+.jets .quad {
+  fill: #2a3139;
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+.jets .jet line {
+  stroke: var(--muted);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.jets .jet .plume {
+  fill: var(--lamp-amber);
+  opacity: 0;
+}
+.jets .vjet circle {
+  fill: var(--bg);
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
+.jets .jet.on line {
+  stroke: var(--lamp-amber);
+}
+.jets .jet.on .plume {
+  opacity: 0.85;
+}
+.jets .vjet.on circle {
+  fill: var(--lamp-amber);
+  stroke: var(--lamp-amber);
+}
+.craft-read {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.readout .k {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font: 600 12px var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.readout .k small {
+  font: 400 11px var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.trio span {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--el-dim);
+}
+.trio b {
+  color: var(--muted);
+  font: 500 10px var(--font-body);
+}
+.trio i {
+  color: var(--el);
+  font-style: normal;
+  font-size: 13px;
+}
+.switches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.seg {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg button {
+  padding: 5px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 600 13px var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.seg button + button {
+  border-left: 1px solid var(--line);
+}
+.seg button[aria-checked='true'] {
+  background: var(--panel-raised);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.toggle input {
+  accent-color: var(--accent);
+}
+.stick {
+  display: grid;
+  grid-template-columns: repeat(7, auto);
+  gap: 6px;
+}
+.stick .ctl {
+  padding: 6px 4px;
+  font-size: 13px;
+  touch-action: none;
+  user-select: none;
+}
+.stick .ctl.held {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.stick .kick {
+  margin-left: 4px;
+}
+.craft .hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation-duration: 3s;
@@ -799,6 +981,16 @@ kbd {
   }
 }
 @media (max-width: 460px) {
+  .craft-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .jets {
+    max-width: 200px;
+    justify-self: center;
+  }
+  .stick {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .dsky {
     padding: 10px;
     gap: 10px;
