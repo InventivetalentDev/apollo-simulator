@@ -112,6 +112,8 @@ const fmtRate = (rad: number) => {
 };
 
 export class LmPanel {
+  /** Jets lit in the diagram on the last update (bit n-1 for jet n), including the glow time. */
+  litJets = 0;
   private lm: LunarModule | null = null;
   private agc: AGC | null = null;
   private imodes33 = -1;
@@ -218,6 +220,7 @@ export class LmPanel {
     this.held.clear();
     this.lastJetSeconds.fill(0);
     this.glowUntil.fill(0);
+    this.litJets = 0;
     if (lm) {
       this.applyStick();
       this.syncSwitches();
@@ -230,10 +233,12 @@ export class LmPanel {
     const g = lm.gimbals;
     [g.outer, g.inner, g.middle].forEach((a, i) => (this.els.gimbals[i].textContent = fmtAngle(a)));
     lm.rate.forEach((r, i) => (this.els.rates[i].textContent = fmtRate(r)));
+    this.litJets = 0;
     for (let j = 0; j < 16; j++) {
       if (lm.jetSeconds[j] > this.lastJetSeconds[j] || lm.jets & (1 << j)) this.glowUntil[j] = now + JET_GLOW_MS;
       this.lastJetSeconds[j] = lm.jetSeconds[j];
       this.jetEls[j]?.classList.toggle('on', this.glowUntil[j] > now);
+      if (this.glowUntil[j] > now) this.litJets |= 1 << j;
     }
     this.els.status.textContent = this.status();
   }

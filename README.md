@@ -65,6 +65,10 @@ With the LM program selected, the panel under the DSKY is the spacecraft:
 the 16 RCS jets seen from above (lit while firing), the IMU gimbal angles,
 the body rates, the PGNS mode switch and a hand controller.
 
+The 3D view above the listing shows the LM at its current attitude against
+the stars, with a plume on each jet while it fires. Drag to look around and
+scroll to zoom.
+
 1. Wait about 12 s after the page loads. The software zeroes the IMU's angle
    counters and lets them count up to the gimbal angles, then wakes the
    digital autopilot (DAP). The status changes to "Autopilot: attitude hold".
@@ -93,7 +97,7 @@ vendor/Apollo-11/          original source (git submodule, public domain)
 src/yul/                   the assembler
 src/agc/                   the AGC emulator and the DSKY interface
 src/sim/                   the spacecraft: LM attitude, RCS jets, IMU, panel switches
-src/ui/                    the web page
+src/ui/                    the web page, including the 3D view (three.js)
 test/                      tests, and the 1969 octal listings used to check the assembler
 ```
 

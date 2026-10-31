@@ -2,11 +2,13 @@ import './styles.css';
 import { INTERRUPT_NAMES, overflowCorrected, REG, type AGC } from '../agc/cpu.ts';
 import { readDsky, type DskyKey } from '../agc/dsky.ts';
 import { PROGRAMS, sourceLink, type ProgramInfo } from '../programs.ts';
+import type { LunarModule } from '../sim/lm.ts';
 import { ropeHash } from '../yul/rope-hash.ts';
 import { assembleSources, type AssembleResponse } from './assemble-sources.ts';
 import { COMMANDS, displayKeys, parseKeys } from './commands.ts';
 import { DskyView, KEYBOARD_MAP } from './dsky-view.ts';
 import { LmPanel } from './lm-panel.ts';
+import type { LmView } from './lm-view.ts';
 import { Machine } from './machine.ts';
 import { formatAddress, ropeIndexOf, SourceView, type SourceLinker } from './source-view.ts';
 
@@ -62,6 +64,7 @@ const dsky = new DskyView($('#dsky-host'), {
 });
 
 const craft = new LmPanel($('#craft'));
+let view: LmView | null = null;
 
 const source = new SourceView($('.source'), {
   onUserNavigate: () => {
@@ -222,6 +225,20 @@ function buildJobTracker(response: AssembleResponse): AGC['jobTracker'] {
   return { exclude, interpreter, locAddress, banksetAddress };
 }
 
+/** Loads the 3D view the first time an LM is shown, then attaches the LM. */
+async function attachView(lm: LunarModule, token: number): Promise<void> {
+  if (!view) {
+    try {
+      const { LmView } = await import('./lm-view.ts');
+      view ??= new LmView($('#view3d'));
+    } catch (err) {
+      console.error('Could not load the 3D view', err);
+      return;
+    }
+  }
+  if (token === loadToken) view.attach(lm);
+}
+
 async function loadProgram(id: string): Promise<void> {
   const info = PROGRAMS.find((p) => p.id === id)!;
   const token = ++loadToken;
@@ -230,6 +247,7 @@ async function loadProgram(id: string): Promise<void> {
   }
   machine = null;
   craft.attach(null, null);
+  view?.attach(null);
   dsky.setVehicle(info.vehicle);
   renderCommands(info.vehicle);
   let loaded = cache.get(id);
@@ -272,6 +290,7 @@ async function loadProgram(id: string): Promise<void> {
   machine = new Machine(response.result.rope, info.vehicle);
   machine.agc.jobTracker = loaded.jobTracker;
   craft.attach(machine.lm, machine.agc, response.result.symbols.find((s) => s.name === 'IMODES33')?.value ?? -1);
+  if (machine.lm) void attachView(machine.lm, token);
   machine.speed = Number(els.speed.value);
   setRunning(true);
   try {
@@ -418,6 +437,7 @@ function frame(now: number): void {
     machine.frame(now);
     dsky.update(readDsky(machine.agc));
     craft.update(now);
+    view?.update(craft.litJets);
     refreshPanels();
   }
   requestAnimationFrame(frame);
