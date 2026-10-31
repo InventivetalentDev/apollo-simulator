@@ -5,7 +5,7 @@ import { PROGRAMS, sourceLink, type ProgramInfo } from '../programs.ts';
 import type { LunarModule } from '../sim/lm.ts';
 import { ropeHash } from '../yul/rope-hash.ts';
 import { assembleSources, type AssembleResponse } from './assemble-sources.ts';
-import { COMMANDS, displayKeys, parseKeys } from './commands.ts';
+import { COMMANDS, displayKeys, parseKeys, type Command } from './commands.ts';
 import { DskyView, KEYBOARD_MAP } from './dsky-view.ts';
 import { LmPanel } from './lm-panel.ts';
 import type { LmView } from './lm-view.ts';
@@ -31,6 +31,7 @@ const els = {
   step: $<HTMLButtonElement>('#step'),
   speed: $<HTMLSelectElement>('#speed'),
   power: $<HTMLButtonElement>('#power'),
+  land: $<HTMLButtonElement>('#land'),
   follow: $<HTMLSelectElement>('#follow'),
   loading: $('#loading'),
   loadingText: $('#loading-text'),
@@ -102,6 +103,11 @@ els.commands.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
   if (!btn) return;
   const command = COMMANDS[Number(btn.dataset.cmd)];
+  runCommand(command);
+});
+
+/** Key in a ready-made command; a setup command first puts the simulation in its state. */
+function runCommand(command: Command): void {
   if (command.setup === 'descent' && machine && program) {
     const symbols = program.response.result.symbols;
     machine.setUpDescent((name) => {
@@ -118,7 +124,7 @@ els.commands.addEventListener('click', (e) => {
   if (shown.top < 0 || shown.bottom > window.innerHeight) dsky.el.scrollIntoView({ behavior, block: 'start' });
   // After a setup, show the LM panel's checklist at the top of the panels under the DSKY.
   if (command.setup) els.leftScroll.scrollTo({ top: 0, behavior });
-});
+}
 
 // ---- Keyboard
 
@@ -157,6 +163,13 @@ els.power.addEventListener('click', () => {
   machine.reset();
   craft.restartChecklist(false);
   refreshPanels(true);
+});
+const DESCENT_SETUP = COMMANDS.find((c) => c.setup === 'descent')!;
+els.land.addEventListener('click', async () => {
+  if (program?.info.id !== 'Luminary099') await loadProgram('Luminary099');
+  if (program?.info.id !== 'Luminary099' || !machine) return;
+  setRunning(true);
+  runCommand(DESCENT_SETUP);
 });
 
 for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-program]')) {

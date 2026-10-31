@@ -148,6 +148,17 @@ kbd {
   opacity: 0.45;
   cursor: default;
 }
+.ctl.land {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font: 600 15px var(--font-body);
+  padding: 7px 16px;
+}
+.ctl.land:hover:not(:disabled) {
+  border-color: var(--accent);
+  filter: brightness(1.1);
+}
 #run-toggle.paused {
   border-color: var(--accent);
   color: var(--accent);
@@ -1157,6 +1168,9 @@ kbd {
   }
 }
 @media (max-width: 460px) {
+  .ctl.land {
+    flex: 1 1 100%;
+  }
   .craft-body {
     grid-template-columns: minmax(0, 1fr);
   }
