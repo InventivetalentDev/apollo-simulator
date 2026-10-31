@@ -12,6 +12,10 @@
 //   - 1 cm/s per accelerometer pulse (KPIP, CONTROLLED_CONSTANTS.agc)
 //   - jet-to-channel wiring from the jet-selection tables of the autopilot
 //     (P-AXIS_RCS_AUTOPILOT.agc, Q_R-AXIS_RCS_AUTOPILOT.agc)
+//
+// In orbit mode the LM also moves: it falls around the Moon, fires its descent
+// engine (descent-engine.ts), and answers the landing radar's reads with "no
+// data".  Positions are in the computer's own inertial frame (moon.ts).
 
 import { AGC, REG, type Peripheral } from '../agc/cpu.ts';
 import {
@@ -33,6 +37,8 @@ import {
   type Quat,
   type Vec3,
 } from './attitude.ts';
+import { DescentEngine, pivotToCg } from './descent-engine.ts';
+import { MOON_MU } from './moon.ts';
 
 const TICK = 1 / 3200; // the computer's scaler calls the hardware 3200 times a second
 const LBF = 4.4482216;
@@ -52,6 +58,10 @@ const PIPA_PULSE = 0.01;
 const RHC_FULL_COUNTS = 42;
 /** Stick deflection (as a fraction of full travel) that takes the controller out of detent. */
 const RHC_DETENT = 0.05;
+/** A landing radar read takes this long before the radar interrupts (ticks). */
+const RADAR_READ_TICKS = Math.round(0.09 * 3200);
+/** The landing radar antenna takes this long to swing to position 2 (ticks). */
+const RADAR_SWING_TICKS = 10 * 3200;
 
 // ---- RCS jets.  Jets 1-4, 5-8, 9-12 and 13-16 share a quad; the quads sit on
 // the diagonals between the Y and Z axes.  Each quad has an up-firing and a
@@ -139,8 +149,21 @@ export class LunarModule implements Peripheral {
   attitude: Quat = IDENTITY;
   /** Body angular rate, rad/s, about X, Y, Z. */
   rate: Vec3 = [0, 0, 0];
-  /** Inertial velocity change from the jets, m/s (no gravity in this model). */
+  /**
+   * Orbit mode: the LM moves under the Moon's gravity, with its descent engine
+   * and landing radar.  Without it the LM only turns, and `velocity` is just
+   * the change the jets have made.
+   */
+  orbiting = false;
+  /** Position in the computer's inertial frame (centred on the Moon), m. */
+  position: Vec3 = [0, 0, 0];
+  /** Inertial velocity, m/s. */
   velocity: Vec3 = [0, 0, 0];
+  /** Radius of the lunar surface under the LM, m: in orbit mode the LM stops there. */
+  surfaceRadius = 0;
+  /** The LM reached the surface. */
+  landed = false;
+  readonly engine = new DescentEngine();
   /** Stable member orientation: turns stable-member vectors into the inertial frame. */
   stableMember: Quat = IDENTITY;
   /** Jets firing now (bit n-1 for jet n). */
@@ -172,6 +195,10 @@ export class LunarModule implements Peripheral {
   private readonly rhcPending = new Int32Array(3);
   private rhcReading = false;
   private readonly jetTorque: Vec3[];
+  /** Ticks until the landing radar read in progress interrupts, or -1 when idle. */
+  private radarRead = -1;
+  /** Ticks the landing radar antenna has been driven towards position 2. */
+  private radarSwing = 0;
 
   constructor(readonly agc: AGC) {
     this.jetTorque = JETS.map((j) => cross(j.position, j.force).map((v) => v * JET_THRUST) as Vec3);
@@ -225,6 +252,8 @@ export class LunarModule implements Peripheral {
       }
     }
 
+    if (this.orbiting) this.descentEngine(force, torque);
+
     // Rigid-body rotation: I dw/dt = torque - w x (I w).
     const [ix, iy, iz] = this.inertia;
     const [p, q, r] = this.rate;
@@ -239,15 +268,20 @@ export class LunarModule implements Peripheral {
     // An IMU that is not running holds no inertial reference: it turns with the body.
     if (gimbalsBefore) this.setGimbals(gimbalsBefore);
 
-    // Translation and the accelerometers (in stable-member axes).
-    if (this.jets) {
+    // Translation and the accelerometers (in stable-member axes).  The
+    // accelerometers feel the jets and the engine, never gravity.
+    if (force[0] || force[1] || force[2]) {
       const body = quatToMatrix(this.attitude);
       const dv = matVec(body, force).map((v) => (v / this.mass) * TICK) as Vec3;
-      for (let k = 0; k < 3; k++) this.velocity[k] += dv[k];
+      if (!this.landed) for (let k = 0; k < 3; k++) this.velocity[k] += dv[k];
       if (this.controls.imuOperate) {
         const sm = matVec(matTranspose(quatToMatrix(this.stableMember)), dv);
         for (let k = 0; k < 3; k++) this.pipaResidual[k] += sm[k];
       }
+    }
+    if (this.orbiting) {
+      this.fall();
+      this.landingRadar();
     }
     this.sendPipaPulses();
 
@@ -266,6 +300,8 @@ export class LunarModule implements Peripheral {
       } else if (ch12 & 0o40) {
         this.errorNeedles[axis] += direction; // attitude-error display
       }
+    } else if (register === REG.THRUST) {
+      this.engine.pulse(direction);
     } else if (register === REG.GYROCMD) {
       if (!this.controls.imuOperate || this.controls.imuCage) return;
       // Channel 14 bits 7-8 select the gyro: X = 01, Y = 10, Z = 11.
@@ -274,6 +310,70 @@ export class LunarModule implements Peripheral {
       const axis: Vec3 = [select === 1 ? 1 : 0, select === 2 ? 1 : 0, select === 3 ? 1 : 0];
       this.stableMember = quatNormalize(quatMultiply(this.stableMember, quatFromAxisAngle(axis, direction * GYRO_PULSE)));
     }
+  }
+
+  // ---- Orbit mode.
+
+  /** Descent engine thrust and the trim gimbal's torque, added to the body-axis force and torque. */
+  private descentEngine(force: Vec3, torque: Vec3): void {
+    const agc = this.agc;
+    const engine = this.engine;
+    const burned = engine.step(TICK, agc.channels[0o11], agc.channels[0o12]);
+    if (!engine.thrust) return;
+    // The thrust leans with the gimbal: pitch tilts it about Y, roll about Z.
+    const [pitch, roll] = engine.gimbal;
+    const t = engine.thrust;
+    force[0] += t * Math.cos(pitch) * Math.cos(roll);
+    force[1] += t * Math.sin(roll);
+    force[2] -= t * Math.sin(pitch) * Math.cos(roll);
+    // The pivot sits below the centre of mass (along -X), so a lean turns the LM.
+    const arm = pivotToCg(this.mass);
+    torque[1] -= arm * t * Math.sin(pitch) * Math.cos(roll);
+    torque[2] -= arm * t * Math.sin(roll);
+    if (burned) this.setMass(this.mass - burned);
+  }
+
+  /** Gravity moves the LM along its orbit, until it reaches the surface. */
+  private fall(): void {
+    if (this.landed) return;
+    const [x, y, z] = this.position;
+    const r = Math.hypot(x, y, z);
+    const g = -MOON_MU / (r * r * r);
+    for (let k = 0; k < 3; k++) this.velocity[k] += g * this.position[k] * TICK;
+    for (let k = 0; k < 3; k++) this.position[k] += this.velocity[k] * TICK;
+    if (r <= this.surfaceRadius) {
+      this.landed = true;
+      this.velocity = [0, 0, 0];
+    }
+  }
+
+  /**
+   * The landing radar, present but without data: it answers each read the
+   * computer starts (channel 13 bit 4) with an empty count and a RADARUPT,
+   * leaves the data-good bits off (channel 33 bits 5 and 8), and swings its
+   * antenna from position 1 to position 2 when channel 12 bit 13 asks.
+   * Without it the read job waits forever and the computer restarts (1210).
+   */
+  private landingRadar(): void {
+    const agc = this.agc;
+    const ch13 = agc.channels[0o13];
+    if (ch13 & 0o10) {
+      if (this.radarRead < 0) this.radarRead = RADAR_READ_TICKS;
+      else if (--this.radarRead === 0) {
+        this.radarRead = -1;
+        agc.mem[REG.RNRAD] = 0;
+        agc.setInputChannel(0o13, ch13 & ~0o10);
+        agc.interruptRequests[9] = true; // RADARUPT
+      }
+    } else {
+      this.radarRead = -1;
+    }
+    if (agc.channels[0o12] & 0o10000) this.radarSwing = Math.min(RADAR_SWING_TICKS, this.radarSwing + 1);
+    else this.radarSwing = Math.max(0, this.radarSwing - 1);
+    // Active low: bit 6 = antenna in position 1, bit 7 = in position 2.
+    const position = this.radarSwing === 0 ? 0o40 : this.radarSwing === RADAR_SWING_TICKS ? 0o100 : 0;
+    const ch33 = (agc.channels[0o33] | 0o360) & ~position;
+    if (agc.channels[0o33] !== ch33) agc.setInputChannel(0o33, ch33);
   }
 
   // ---- Inputs.
