@@ -69,6 +69,8 @@ export interface DskyState {
   lamps: DskyLamps;
   /** True while the verb/noun digits are in the "off" phase of flashing. */
   vnBlank: boolean;
+  /** True while verb and noun flash: the computer is waiting for the crew. */
+  vnFlashing: boolean;
 }
 
 function sign(plus: number, minus: number): string {
@@ -100,6 +102,7 @@ export function readDsky(agc: AGC): DskyState {
       sign(rw[2], rw[1]) + right(3) + left(2) + right(2) + left(1) + right(1),
     ],
     vnBlank: (ch11 & 0o40) !== 0 && flashOff,
+    vnFlashing: (ch11 & 0o40) !== 0,
     lamps: {
       uplinkActy: (ch11 & 0o4) !== 0,
       noAtt: (lampRow & 0o10) !== 0,

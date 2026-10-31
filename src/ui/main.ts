@@ -63,7 +63,15 @@ const dsky = new DskyView($('#dsky-host'), {
   },
 });
 
-const craft = new LmPanel($('#craft'));
+const craft = new LmPanel($('#craft'), {
+  type: (keys) => typeKeys(parseKeys(keys)),
+  cue: (key) => dsky.cue(key),
+  speed: () => machine?.speed ?? 1,
+  setSpeed: (speed) => {
+    els.speed.value = String(speed);
+    if (machine) machine.speed = speed;
+  },
+});
 let view: LmView | null = null;
 
 const source = new SourceView($('.source'), {
@@ -100,7 +108,7 @@ els.commands.addEventListener('click', (e) => {
       if (!symbol) throw new Error(`no symbol ${name}`);
       return symbol.value;
     });
-    craft.attach(machine.lm, machine.agc, symbols.find((s) => s.name === 'IMODES33')?.value ?? -1);
+    craft.attach(machine.lm, machine.agc, (name) => symbols.find((s) => s.name === name)?.value ?? -1);
   }
   typeKeys(parseKeys(command.keys));
   // On a narrow screen the DSKY is above the list: bring it back into view.
@@ -145,6 +153,7 @@ els.speed.addEventListener('change', () => {
 els.power.addEventListener('click', () => {
   if (!machine) return;
   machine.reset();
+  craft.restartChecklist();
   refreshPanels(true);
 });
 
@@ -299,7 +308,8 @@ async function loadProgram(id: string): Promise<void> {
   showAssemblyStatus(loaded);
   machine = new Machine(response.result.rope, info.vehicle);
   machine.agc.jobTracker = loaded.jobTracker;
-  craft.attach(machine.lm, machine.agc, response.result.symbols.find((s) => s.name === 'IMODES33')?.value ?? -1);
+  const symbols = response.result.symbols;
+  craft.attach(machine.lm, machine.agc, (name) => symbols.find((s) => s.name === name)?.value ?? -1);
   if (machine.lm) void attachView(machine.lm, token);
   machine.speed = Number(els.speed.value);
   setRunning(true);

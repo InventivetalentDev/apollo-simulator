@@ -6,6 +6,7 @@ import { descentState, loadDescent, prepareLunarModule } from '../src/sim/descen
 import { DescentEngine, DPS_FULL_THROTTLE, DPS_MINIMUM, pivotToCg } from '../src/sim/descent-engine.ts';
 import { LunarModule } from '../src/sim/lm.ts';
 import { MOON_MU, moonAxes, moonFixedToInertial, inertialToMoonFixed } from '../src/sim/moon.ts';
+import { DESCENT_STEPS, DescentChecklist } from '../src/ui/descent-checklist.ts';
 import { bootLm } from './helpers.ts';
 
 const DEG = Math.PI / 180;
@@ -121,31 +122,21 @@ test('Luminary099 flies P63 from the descent setup to high gate', () => {
     return rn.reduce((sum, x, k) => sum + (x - truth[k]) * up[k], 0);
   };
 
-  // The crew's part: proceed through the displays P63 shows.
-  const answered = new Set<string>();
+  // The crew's part: answer each display with the key the panel's checklist names.
+  const checklist = new DescentChecklist(address('TIG'));
+  const steps: number[] = [];
   let ignition = 0;
   let errorAtIgnition = NaN;
   let fullThrottle = 0;
   let highGate: { time: number; altitude: number; error: number } | undefined;
-  for (let t = 0; t < 900 && !highGate; t += 0.5) {
-    run(0.5);
+  // Check as often as a 10 Hz screen would, so brief displays between questions show up.
+  for (let t = 0; t < 900 && !highGate; t += 0.1) {
+    run(0.1);
     const d = readDsky(agc);
-    const vn = d.verb + d.noun;
-    if (vn === '0661' && !answered.has('N61')) {
-      answered.add('N61');
-      keys('PRO');
-    } else if (vn === '5025' && d.r[0].trim() === '00014' && !answered.has('N25')) {
-      answered.add('N25');
-      keys('E'); // no fine alignment
-    } else if (vn === '5018' && !answered.has('maneuver')) {
-      answered.add('maneuver');
-      keys('PRO'); // turn to the ignition attitude
-    } else if (vn === '5018' && !answered.has('attitude')) {
-      answered.add('attitude');
-      keys('E'); // accept it
-    } else if (d.verb === '99' && !answered.has('V99')) {
-      answered.add('V99');
-      keys('PRO'); // engine enable
+    const step = checklist.current(agc, lm)!;
+    if (step.number !== steps.at(-1)) {
+      steps.push(step.number);
+      if (step.key) keys(step.key);
     }
     if (!ignition && DescentEngine.commandedOn(agc.channels[0o11])) {
       ignition = clock();
@@ -163,6 +154,8 @@ test('Luminary099 flies P63 from the descent setup to high gate', () => {
   assert.ok(Math.abs(errorAtIgnition) < 20, `computer within 20 m of the LM at ignition (${errorAtIgnition.toFixed(1)} m)`);
   assert.ok(Math.abs(fullThrottle - DPS_FULL_THROTTLE) < 100, `full throttle after the zoom time (${fullThrottle.toFixed(0)} N)`);
   assert.ok(highGate, 'P64 reached');
+  // The checklist walked the crew through every step, in order.
+  assert.deepEqual(steps, Array.from({ length: DESCENT_STEPS }, (_, k) => k + 1), `checklist steps ${steps.join(' ')}`);
   assert.ok(highGate.altitude > 1500 && highGate.altitude < 3000, `high gate at ${highGate.altitude.toFixed(0)} m, ${fmt(highGate.time)}`);
   // Without landing-radar data the computer's altitude drifts high: its powered-flight gravity is a sphere.
   assert.ok(Math.abs(highGate.error) < 100, `computer within 100 m of the LM at high gate (${highGate.error.toFixed(1)} m)`);

@@ -97,17 +97,27 @@ to high gate, about 2 km above the Moon.
    mission time: the LM is in its descent orbit 18 km up, the IMU is aligned
    to the landing site, and memory holds the 1969 pre-launch erasable load.
    The DSKY then clears the restart alarm and loads the autopilot data.
-2. Click **Start powered descent (P63)**. P63 computes the ignition time,
-   about 102:32:50 (Apollo 11 lit at 102:33:05).
-3. Answer P63 on the DSKY:
-   - **V06 N61:** press PRO.
-   - **V50 N25 with 00014:** press ENTER (skip the fine alignment).
-   - **V50 N18:** press PRO, and press ENTER when it flashes again.
-   - **V99**, 35 s before ignition: press PRO to enable the engine.
+2. In the checklist at the top of the Lunar Module panel, click **Start
+   P63**. P63 computes the ignition time, about 102:32:50 (Apollo 11 lit at
+   102:33:05).
+3. Answer P63 on the DSKY. For each question the checklist explains what
+   it means and lights up the key that answers it. Press the lit key, or
+   click **Press it for me**. The questions are:
+   - **V06 N61** flashing (ignition time computed): press PRO.
+   - **V50 N25 with 00014** flashing (fine alignment offered): press ENTR to
+     skip it.
+   - **V50 N18** flashing (turn to the ignition attitude?): press PRO. The
+     LM turns, and the DSKY shows V06 N18 without flashing.
+   - **V50 N18** flashing again (the turn is done): press ENTR to accept the
+     attitude. The DSKY then stays blank for about 5 minutes.
+   - **V99** flashing, 35 s before ignition (enable the engine?): press PRO.
 4. Watch the burn. The jets fire for ullage, the engine lights at minimum
    thrust, and 26 s later it goes to full throttle. The computer throttles
-   down about 6½ minutes in, and P64 starts at high gate. Use the speed menu
-   to shorten the waits.
+   down about 6½ minutes in, and P64 starts at high gate.
+
+While the crew waits, for the turn, for ignition, or during the burn, the
+checklist's **Fast-forward** button runs the simulation at 20× until the
+next step, then returns to the speed you had.
 
 During the descent the panel shows the LM's true altitude, speeds, thrust
 and propellant. The DSKY shows what the computer believes, for example in

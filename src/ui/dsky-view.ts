@@ -173,6 +173,13 @@ export class DskyView {
     }
   }
 
+  /** Light up the key the crew should press next (none for null). */
+  cue(key: DskyKey | null): void {
+    for (const btn of this.el.querySelectorAll<HTMLElement>('button[data-key]')) {
+      btn.classList.toggle('cue', btn.dataset.key === key);
+    }
+  }
+
   /** Briefly show a key as pressed (for keys typed by commands or the keyboard). */
   flashKey(key: DskyKey): void {
     const btn = this.el.querySelector<HTMLElement>(`button[data-key="${CSS.escape(key)}"]`);

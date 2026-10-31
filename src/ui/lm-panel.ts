@@ -1,11 +1,13 @@
 // The LM panel: the RCS jets seen from above, the IMU gimbal angles and body
 // rates, the PGNS mode switch, the IMU switch, and a hand controller
 // (on-screen buttons or the keyboard).  In orbit it also shows the LM's true
-// altitude, speeds, thrust and propellant.
+// altitude, speeds, thrust and propellant, and the powered-descent checklist.
 
 import type { AGC } from '../agc/cpu.ts';
+import type { DskyKey } from '../agc/dsky.ts';
 import { DEG, type Vec3 } from '../sim/attitude.ts';
 import { JETS, type LunarModule, type ModeControl } from '../sim/lm.ts';
+import { DESCENT_STEPS, DescentChecklist, type DescentStep } from './descent-checklist.ts';
 
 /** Stick deflection for a held key or button; Shift gives full deflection. */
 const STICK_NORMAL = 0.5;
@@ -13,6 +15,19 @@ const STICK_NORMAL = 0.5;
 const JET_GLOW_MS = 140;
 /** The descent engine's rated thrust, 10,500 lbf: 100% on the LM's thrust meter. */
 const DPS_RATED = 10500 * 4.4482216;
+
+/** Simulation speed while the checklist fast-forwards through a wait. */
+const FAST_FORWARD = 20;
+
+/** What the checklist's buttons need from the page. */
+export interface ChecklistHost {
+  /** Type DSKY keys at human speed (space separated; V, N, E stand for VERB, NOUN, ENTR). */
+  type(keys: string): void;
+  /** Light up the DSKY key the crew should press, or none. */
+  cue(key: DskyKey | null): void;
+  speed(): number;
+  setSpeed(speed: number): void;
+}
 
 type StickInput = 'pitchUp' | 'pitchDown' | 'rollLeft' | 'rollRight' | 'yawLeft' | 'yawRight';
 
@@ -120,6 +135,12 @@ export class LmPanel {
   private lm: LunarModule | null = null;
   private agc: AGC | null = null;
   private imodes33 = -1;
+  private tig = -1;
+  private checklist = new DescentChecklist();
+  private step: DescentStep | null = null;
+  private cued: DskyKey | null = null;
+  /** The speed to go back to after fast-forward, or 0 when not fast-forwarding. */
+  private resumeSpeed = 0;
   private readonly held = new Set<StickInput>();
   private full = false;
   private readonly jetEls: SVGGElement[] = [];
@@ -131,16 +152,37 @@ export class LmPanel {
     rates: HTMLElement[];
     descent: HTMLElement;
     descentValues: HTMLElement[];
+    checklist: HTMLElement;
+    step: Record<'count' | 'title' | 'detail' | 'act' | 'action' | 'timer', HTMLElement>;
+    do: HTMLButtonElement;
     modes: HTMLButtonElement[];
     imu: HTMLInputElement;
   };
 
-  constructor(readonly host: HTMLElement) {
+  constructor(
+    readonly host: HTMLElement,
+    private readonly checklistHost: ChecklistHost,
+  ) {
     host.innerHTML = `
       <div class="craft-head">
         <h2 id="craft-title">Lunar Module</h2>
         <span class="craft-status" id="craft-status" role="status">—</span>
       </div>
+      <section class="checklist" aria-labelledby="checklist-label" hidden>
+        <div class="checklist-head">
+          <span class="k" id="checklist-label">Powered descent</span>
+          <span class="mono" data-step="count"></span>
+        </div>
+        <div aria-live="polite">
+          <p class="checklist-title" data-step="title"></p>
+          <p class="checklist-detail" data-step="detail"></p>
+        </div>
+        <div class="checklist-act" data-step="act">
+          <span class="checklist-action" data-step="action"></span>
+          <button type="button" class="ctl checklist-do" data-do></button>
+        </div>
+        <p class="checklist-timer mono" data-step="timer"></p>
+      </section>
       <div class="craft-body">
         ${jetDiagram()}
         <div class="craft-read">
@@ -189,6 +231,11 @@ export class LmPanel {
       rates: [...host.querySelectorAll<HTMLElement>('[data-r]')],
       descent: host.querySelector('.descent')!,
       descentValues: [...host.querySelectorAll<HTMLElement>('[data-d]')],
+      checklist: host.querySelector('.checklist')!,
+      step: Object.fromEntries(
+        [...host.querySelectorAll<HTMLElement>('[data-step]')].map((el) => [el.dataset.step, el]),
+      ) as LmPanel['els']['step'],
+      do: host.querySelector('[data-do]')!,
       modes: [...host.querySelectorAll<HTMLButtonElement>('[data-mode]')],
       imu: host.querySelector('#craft-imu')!,
     };
@@ -202,6 +249,7 @@ export class LmPanel {
         this.syncSwitches();
       }
       if (target.closest('[data-kick]')) this.kick();
+      if (target.closest('[data-do]')) this.doStep();
     });
     this.els.imu.addEventListener('change', () => {
       if (this.lm) this.lm.controls.imuOperate = this.els.imu.checked;
@@ -228,11 +276,13 @@ export class LmPanel {
     });
   }
 
-  /** Show the panel for an LM (with the address of IMODES33, for the IMU status), or hide it. */
-  attach(lm: LunarModule | null, agc: AGC | null, imodes33Address = -1): void {
+  /** Show the panel for an LM, or hide it.  `addressOf` finds erasable symbols (-1 when missing). */
+  attach(lm: LunarModule | null, agc: AGC | null, addressOf: (name: string) => number = () => -1): void {
     this.lm = lm;
     this.agc = agc;
-    this.imodes33 = imodes33Address;
+    this.imodes33 = addressOf('IMODES33');
+    this.tig = addressOf('TIG');
+    this.restartChecklist();
     this.host.hidden = !lm;
     this.held.clear();
     this.lastJetSeconds.fill(0);
@@ -260,6 +310,67 @@ export class LmPanel {
     this.els.status.textContent = this.status();
     this.els.descent.hidden = !lm.orbiting;
     if (lm.orbiting) this.updateDescent(lm);
+    this.updateChecklist(lm, this.agc);
+  }
+
+  /** Start the descent checklist over, after a setup or a computer restart. */
+  restartChecklist(): void {
+    this.checklist = new DescentChecklist(this.tig);
+    this.step = null;
+    this.fastForward(false);
+    this.cue(null);
+  }
+
+  /** The checklist's button: answer the DSKY, start P63, or fast-forward through a wait. */
+  private doStep(): void {
+    const step = this.step;
+    if (!step) return;
+    if (step.key) this.checklistHost.type(step.key);
+    else if (step.keys) this.checklistHost.type(step.keys);
+    else if (step.wait) this.fastForward(!this.resumeSpeed);
+  }
+
+  private fastForward(on: boolean): void {
+    const host = this.checklistHost;
+    if (on && !this.resumeSpeed) {
+      this.resumeSpeed = host.speed();
+      host.setSpeed(FAST_FORWARD);
+    } else if (!on && this.resumeSpeed) {
+      // Leave the speed alone if it was changed by hand meanwhile.
+      if (host.speed() === FAST_FORWARD) host.setSpeed(this.resumeSpeed);
+      this.resumeSpeed = 0;
+    }
+  }
+
+  private cue(key: DskyKey | null): void {
+    if (key === this.cued) return;
+    this.cued = key;
+    this.checklistHost.cue(key);
+  }
+
+  private updateChecklist(lm: LunarModule, agc: AGC): void {
+    const step = this.checklist.current(agc, lm);
+    // A new step ends fast-forward, so every question and event comes at the chosen speed.
+    if (step?.number !== this.step?.number || step?.key !== this.step?.key) this.fastForward(false);
+    this.step = step;
+    this.cue(step?.key ?? null);
+    this.els.checklist.hidden = !step;
+    if (!step) return;
+    const set = (el: HTMLElement, html: string) => {
+      if (el.innerHTML !== html) el.innerHTML = html;
+    };
+    const s = this.els.step;
+    set(s.count, `Step ${step.number} of ${DESCENT_STEPS}`);
+    set(s.title, step.title);
+    set(s.detail, step.detail);
+    set(s.timer, step.timer ?? '');
+    s.timer.hidden = !step.timer;
+    const canSpeedUp = step.wait && (this.resumeSpeed > 0 || this.checklistHost.speed() < FAST_FORWARD);
+    set(s.action, step.key ? `Press the lit <kbd>${step.key}</kbd> key on the DSKY, or` : '');
+    set(this.els.do, step.key ? 'Press it for me' : step.keys ? 'Start P63' : `Fast-forward ${FAST_FORWARD}×`);
+    this.els.do.setAttribute('aria-pressed', String(this.resumeSpeed > 0));
+    if (!step.wait) this.els.do.removeAttribute('aria-pressed');
+    s.act.hidden = !(step.key || step.keys || canSpeedUp);
   }
 
   private updateDescent(lm: LunarModule): void {
