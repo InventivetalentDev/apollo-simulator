@@ -14,8 +14,8 @@
 //     (P-AXIS_RCS_AUTOPILOT.agc, Q_R-AXIS_RCS_AUTOPILOT.agc)
 //
 // In orbit mode the LM also moves: it falls around the Moon, fires its descent
-// engine (descent-engine.ts), and answers the landing radar's reads with "no
-// data".  Positions are in the computer's own inertial frame (moon.ts).
+// engine (descent-engine.ts), and measures its altitude and velocity with the
+// landing radar.  Positions are in the computer's own inertial frame (moon.ts).
 
 import { AGC, REG, type Peripheral } from '../agc/cpu.ts';
 import {
@@ -34,11 +34,12 @@ import {
   quatFromAxisAngle,
   TWO_PI,
   type GimbalAngles,
+  type Mat3,
   type Quat,
   type Vec3,
 } from './attitude.ts';
 import { DescentEngine, pivotToCg } from './descent-engine.ts';
-import { moonGravity } from './moon.ts';
+import { moonGravity, moonSpin } from './moon.ts';
 
 const TICK = 1 / 3200; // the computer's scaler calls the hardware 3200 times a second
 const LBF = 4.4482216;
@@ -62,6 +63,31 @@ const RHC_DETENT = 0.05;
 const RADAR_READ_TICKS = Math.round(0.09 * 3200);
 /** The landing radar antenna takes this long to swing to position 2 (ticks). */
 const RADAR_SWING_TICKS = 10 * 3200;
+/** An angle given in CDU counts, as the pad load gives the radar antenna's angles. */
+const cduAngle = (counts: number) => (counts * TWO_PI) / CDU_COUNTS;
+/**
+ * The landing radar antenna's axes in navigation-base axes, in position 1
+ * (descent) and position 2 (hover): rotations about X and Y by the pad-loaded
+ * LRALPHA and LRBETA1, and LRALPHA2 and LRBETA2.  The computer gets the same
+ * angles in its erasable load (descent.ts).
+ */
+const RADAR_ANTENNA = [
+  gimbalMatrix({ outer: cduAngle(0o1027), inner: cduAngle(0o4204), middle: 0 }),
+  gimbalMatrix({ outer: cduAngle(0o1022), inner: cduAngle(0o4), middle: 0 }),
+];
+/** The altitude beam in antenna axes (HBEAMANT, CONTROLLED_CONSTANTS.agc, which holds it at half scale). */
+const ALTITUDE_BEAM: Vec3 = [-0.9374036082, 0, -0.3482448542];
+/** Slant range per count on the low scale (HSCAL); the high scale counts five times as much (HISCALIM). */
+const RANGE_LOW_SCALE = 1.079 * FOOT;
+const RANGE_HIGH_SCALE = 5 * RANGE_LOW_SCALE;
+/** Below this slant range the radar measures on its low scale. */
+const RANGE_SCALE_CHANGE = 2500 * FOOT;
+/** Velocity counts are biased by 12,288 (LVELBIAS, the 153.6 kHz carrier). */
+const VELOCITY_BIAS = 12288;
+/** Velocity per count along the antenna's X, Y and Z axes, m/s (VXSCAL, VYSCAL, VZSCAL). */
+const VELOCITY_SCALE: Vec3 = [-0.644 * FOOT, 1.212 * FOOT, 0.8668 * FOOT];
+/** The radar's counter holds 15 bits. */
+const RADAR_COUNT_MAX = 0o77777;
 
 // ---- RCS jets.  Jets 1-4, 5-8, 9-12 and 13-16 share a quad; the quads sit on
 // the diagonals between the Y and Z axes.  Each quad has an up-firing and a
@@ -159,12 +185,22 @@ export class LunarModule implements Peripheral {
   position: Vec3 = [0, 0, 0];
   /** Inertial velocity, m/s. */
   velocity: Vec3 = [0, 0, 0];
+  /** The planned landing site, Moon-fixed, m. */
+  site: Vec3 = [0, 0, 0];
   /** Radius of the lunar surface under the LM, m: in orbit mode the LM stops there. */
   surfaceRadius = 0;
   /** Seconds since the ephemeris epoch: where the Moon has turned to, for its gravity. */
   ephemerisTime = 0;
   /** The LM reached the surface. */
   landed = false;
+  /** Speeds against the ground at touchdown, m/s (vertical is negative going down), or null before it. */
+  touchdown: { vertical: number; horizontal: number } | null = null;
+  /**
+   * Slant range from the landing radar to the surface along its altitude beam,
+   * m, or null while the beam misses the Moon or the counter cannot hold it:
+   * then the radar has no data.
+   */
+  radarRange: number | null = null;
   readonly engine = new DescentEngine();
   /** Stable member orientation: turns stable-member vectors into the inertial frame. */
   stableMember: Quat = IDENTITY;
@@ -266,20 +302,24 @@ export class LunarModule implements Peripheral {
       q + ((torque[1] - (ix - iz) * r * p) / iy) * TICK,
       r + ((torque[2] - (iy - ix) * p * q) / iz) * TICK,
     ];
+    if (this.landed) this.rate = [0, 0, 0]; // the legs hold the LM still
     this.attitude = quatIntegrate(this.attitude, this.rate, TICK);
     // An IMU that is not running holds no inertial reference: it turns with the body.
     if (gimbalsBefore) this.setGimbals(gimbalsBefore);
 
     // Translation and the accelerometers (in stable-member axes).  The
-    // accelerometers feel the jets and the engine, never gravity.
-    if (force[0] || force[1] || force[2]) {
-      const body = quatToMatrix(this.attitude);
-      const dv = matVec(body, force).map((v) => (v / this.mass) * TICK) as Vec3;
-      if (!this.landed) for (let k = 0; k < 3; k++) this.velocity[k] += dv[k];
-      if (this.controls.imuOperate) {
-        const sm = matVec(matTranspose(quatToMatrix(this.stableMember)), dv);
-        for (let k = 0; k < 3; k++) this.pipaResidual[k] += sm[k];
-      }
+    // accelerometers feel the jets and the engine, never gravity.  On the
+    // surface they feel only the ground holding the LM up.
+    let felt: Vec3 | null = null;
+    if (this.landed) {
+      felt = moonGravity(this.position, this.ephemerisTime).map((a) => -a * TICK) as Vec3;
+    } else if (force[0] || force[1] || force[2]) {
+      felt = matVec(quatToMatrix(this.attitude), force).map((v) => (v / this.mass) * TICK) as Vec3;
+      for (let k = 0; k < 3; k++) this.velocity[k] += felt[k];
+    }
+    if (felt && this.controls.imuOperate) {
+      const sm = matVec(matTranspose(quatToMatrix(this.stableMember)), felt);
+      for (let k = 0; k < 3; k++) this.pipaResidual[k] += sm[k];
     }
     if (this.orbiting) {
       this.fall();
@@ -320,6 +360,13 @@ export class LunarModule implements Peripheral {
   resetLandingRadar(): void {
     this.radarRead = -1;
     this.radarSwing = 0;
+    this.radarRange = null;
+  }
+
+  /** Velocity against the ground, which turns with the Moon, m/s. */
+  groundVelocity(): Vec3 {
+    const ground = cross(moonSpin(this.ephemerisTime), this.position);
+    return this.velocity.map((v, k) => v - ground[k]) as Vec3;
   }
 
   /** Descent engine thrust and the trim gimbal's torque, added to the body-axis force and torque. */
@@ -341,47 +388,90 @@ export class LunarModule implements Peripheral {
     if (burned) this.setMass(this.mass - burned);
   }
 
-  /** Gravity moves the LM along its orbit, until it reaches the surface. */
+  /** Gravity moves the LM along its orbit until it reaches the surface; after that it turns with the Moon. */
   private fall(): void {
     const g = moonGravity(this.position, this.ephemerisTime);
     this.ephemerisTime += TICK;
-    if (this.landed) return;
-    for (let k = 0; k < 3; k++) this.velocity[k] += g[k] * TICK;
+    if (this.landed) this.velocity = cross(moonSpin(this.ephemerisTime), this.position);
+    else for (let k = 0; k < 3; k++) this.velocity[k] += g[k] * TICK;
     for (let k = 0; k < 3; k++) this.position[k] += this.velocity[k] * TICK;
-    if (Math.hypot(...this.position) <= this.surfaceRadius) {
+    if (!this.landed && Math.hypot(...this.position) <= this.surfaceRadius) {
+      const v = this.groundVelocity();
+      const r = Math.hypot(...this.position);
+      const vertical = (v[0] * this.position[0] + v[1] * this.position[1] + v[2] * this.position[2]) / r;
+      this.touchdown = { vertical, horizontal: Math.sqrt(Math.max(0, v[0] ** 2 + v[1] ** 2 + v[2] ** 2 - vertical ** 2)) };
       this.landed = true;
-      this.velocity = [0, 0, 0];
     }
   }
 
   /**
-   * The landing radar, present but without data: it answers each read the
-   * computer starts (channel 13 bit 4) with an empty count and a RADARUPT,
-   * leaves the data-good bits off (channel 33 bits 5 and 8), and swings its
-   * antenna from position 1 to position 2 while channel 12 bit 13 asks.
-   * Without it the read job waits forever and the computer restarts (1210).
+   * The landing radar.  Each read the computer starts (channel 13 bit 4)
+   * takes a sample of what channel 13 bits 1-3 select: the slant range (7) or
+   * the velocity along the antenna's Z, Y or X axis (6, 5, 4).  The count goes
+   * into RNRAD and a RADARUPT ends the read.  While the altitude beam reaches
+   * the surface, channel 33 says the data are good (bits 5 and 8, active low)
+   * and which range scale is in use (bit 9, set for the high scale).  The
+   * antenna swings from position 1 to position 2 while channel 12 bit 13 asks.
    */
   private landingRadar(): void {
     const agc = this.agc;
+    // The antenna moves only while commanded, and stays in position 2 once
+    // there: the software removes the command after it arrives.
+    if (agc.channels[0o12] & 0o10000) this.radarSwing = Math.min(RADAR_SWING_TICKS, this.radarSwing + 1);
+    const antenna = RADAR_ANTENNA[this.radarSwing === RADAR_SWING_TICKS ? 1 : 0];
+    const body = quatToMatrix(this.attitude);
+    this.radarRange = this.slantRange(matVec(body, matVec(antenna, ALTITUDE_BEAM)));
+    const lowScale = this.radarRange !== null && this.radarRange < RANGE_SCALE_CHANGE;
+
     const ch13 = agc.channels[0o13];
     if (ch13 & 0o10) {
       if (this.radarRead < 0) this.radarRead = RADAR_READ_TICKS;
       else if (--this.radarRead === 0) {
         this.radarRead = -1;
-        agc.mem[REG.RNRAD] = 0;
+        agc.mem[REG.RNRAD] = this.radarCount(ch13 & 7, body, antenna, lowScale);
         agc.setInputChannel(0o13, ch13 & ~0o10);
         agc.interruptRequests[9] = true; // RADARUPT
       }
     } else {
       this.radarRead = -1;
     }
-    // The antenna moves only while commanded, and stays in position 2 once
-    // there: the software removes the command after it arrives.
-    if (agc.channels[0o12] & 0o10000) this.radarSwing = Math.min(RADAR_SWING_TICKS, this.radarSwing + 1);
+
     // Active low: bit 6 = antenna in position 1, bit 7 = in position 2.
     const position = this.radarSwing === 0 ? 0o40 : this.radarSwing === RADAR_SWING_TICKS ? 0o100 : 0;
-    const ch33 = (agc.channels[0o33] | 0o360) & ~position;
+    let ch33 = (agc.channels[0o33] | 0o760) & ~position;
+    if (this.radarRange !== null) ch33 &= ~0o220;
+    if (lowScale) ch33 &= ~0o400;
     if (agc.channels[0o33] !== ch33) agc.setInputChannel(0o33, ch33);
+  }
+
+  /** Distance along `beam` (an inertial unit vector) to the surface, or null when the radar cannot measure it. */
+  private slantRange(beam: Vec3): number | null {
+    const p = this.position;
+    const along = p[0] * beam[0] + p[1] * beam[1] + p[2] * beam[2];
+    const above = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] - this.surfaceRadius ** 2;
+    if (above <= 0) return 0;
+    const disc = along * along - above;
+    if (disc < 0 || along > 0) return null; // the beam passes the Moon, or points away from it
+    const range = -along - Math.sqrt(disc);
+    return range <= RADAR_COUNT_MAX * RANGE_HIGH_SCALE ? range : null;
+  }
+
+  /** The count a radar read returns for channel 13 select code `select` (0 without data or for the rendezvous radar). */
+  private radarCount(select: number, body: Mat3, antenna: Mat3, lowScale: boolean): number {
+    if (this.radarRange === null || select < 4) return 0;
+    let count: number;
+    if (select === 7) {
+      count = this.radarRange / (lowScale ? RANGE_LOW_SCALE : RANGE_HIGH_SCALE);
+    } else {
+      const axis = select - 4;
+      const relative = this.groundVelocity();
+      const unit: Vec3 = [0, 0, 0];
+      unit[axis] = 1;
+      const along = matVec(body, matVec(antenna, unit));
+      const speed = relative[0] * along[0] + relative[1] * along[1] + relative[2] * along[2];
+      count = VELOCITY_BIAS + speed / VELOCITY_SCALE[axis];
+    }
+    return Math.max(0, Math.min(RADAR_COUNT_MAX, Math.round(count)));
   }
 
   // ---- Inputs.

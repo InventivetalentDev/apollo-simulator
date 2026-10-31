@@ -7,6 +7,7 @@ import type { AGC } from '../agc/cpu.ts';
 import type { DskyKey } from '../agc/dsky.ts';
 import { DEG, type Vec3 } from '../sim/attitude.ts';
 import { JETS, type LunarModule, type ModeControl } from '../sim/lm.ts';
+import { displayKeys } from './commands.ts';
 import { DESCENT_STEPS, DescentChecklist, type DescentStep } from './descent-checklist.ts';
 
 /** Stick deflection for a held key or button; Shift gives full deflection. */
@@ -135,7 +136,7 @@ export class LmPanel {
   private lm: LunarModule | null = null;
   private agc: AGC | null = null;
   private imodes33 = -1;
-  private tig = -1;
+  private addressOf: (name: string) => number = () => -1;
   private checklist = new DescentChecklist();
   private step: DescentStep | null = null;
   private cued: DskyKey | null = null;
@@ -281,7 +282,7 @@ export class LmPanel {
     this.lm = lm;
     this.agc = agc;
     this.imodes33 = addressOf('IMODES33');
-    this.tig = addressOf('TIG');
+    this.addressOf = addressOf;
     this.restartChecklist();
     this.host.hidden = !lm;
     this.held.clear();
@@ -315,18 +316,19 @@ export class LmPanel {
 
   /** Start the descent checklist over: after a setup, or after a restart that cleared memory (`loaded` false). */
   restartChecklist(loaded = true): void {
-    this.checklist = new DescentChecklist(this.tig, loaded);
+    this.checklist = new DescentChecklist(this.addressOf, loaded);
     this.step = null;
     this.fastForward(false);
     this.cue(null);
   }
 
-  /** The checklist's button: answer the DSKY, start P63, or fast-forward through a wait. */
+  /** The checklist's button: answer the DSKY, key in a verb, stop the engine, or fast-forward through a wait. */
   private doStep(): void {
     const step = this.step;
     if (!step) return;
     if (step.key) this.checklistHost.type(step.key);
     else if (step.keys) this.checklistHost.type(step.keys);
+    else if (step.stopEngine && this.lm) this.lm.engine.armed = false;
     else if (step.wait) this.fastForward(!this.resumeSpeed);
   }
 
@@ -366,21 +368,26 @@ export class LmPanel {
     set(s.timer, step.timer ?? '');
     s.timer.hidden = !step.timer;
     const canSpeedUp = step.wait && (this.resumeSpeed > 0 || this.checklistHost.speed() < FAST_FORWARD);
-    set(s.action, step.key ? `Press the lit <kbd>${step.key}</kbd> key on the DSKY, or` : '');
-    set(this.els.do, step.key ? 'Press it for me' : step.keys ? 'Start P63' : `Fast-forward ${FAST_FORWARD}×`);
+    const kbd = (keys: string) => displayKeys(keys).split(' ').map((k) => `<kbd>${k}</kbd>`).join(' ');
+    set(
+      s.action,
+      step.key ? `Press the lit <kbd>${step.key}</kbd> key on the DSKY, or` : step.keys ? `Key ${kbd(step.keys)} on the DSKY, or` : '',
+    );
+    set(this.els.do, step.key ? 'Press it for me' : (step.button ?? `Fast-forward ${FAST_FORWARD}×`));
     this.els.do.setAttribute('aria-pressed', String(this.resumeSpeed > 0));
     if (!step.wait) this.els.do.removeAttribute('aria-pressed');
-    s.act.hidden = !(step.key || step.keys || canSpeedUp);
+    s.act.hidden = !(step.key || step.keys || step.stopEngine || canSpeedUp);
   }
 
   private updateDescent(lm: LunarModule): void {
     const r = Math.hypot(...lm.position);
     const up = lm.position.map((x) => x / r);
-    const vertical = lm.velocity.reduce((sum, v, k) => sum + v * up[k], 0);
-    const horizontal = Math.sqrt(Math.max(0, lm.velocity.reduce((sum, v) => sum + v * v, 0) - vertical * vertical));
+    const ground = lm.groundVelocity();
+    const vertical = ground.reduce((sum, v, k) => sum + v * up[k], 0);
+    const horizontal = Math.sqrt(Math.max(0, ground.reduce((sum, v) => sum + v * v, 0) - vertical * vertical));
     const signed = (x: number, digits: number) => `${x < 0 ? '−' : '+'}${Math.abs(x).toFixed(digits)}`;
     [
-      Math.round(r - lm.surfaceRadius).toLocaleString('en-US'),
+      Math.max(0, Math.round(r - lm.surfaceRadius)).toLocaleString('en-US'),
       signed(vertical, 1),
       horizontal.toFixed(1),
       ((100 * lm.engine.thrust) / DPS_RATED).toFixed(0),

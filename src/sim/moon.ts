@@ -56,6 +56,14 @@ export function moonAxes(seconds: number): [Vec3, Vec3, Vec3] {
   return [m0, m1, m2];
 }
 
+/**
+ * The Moon's angular velocity, rad/s, in inertial coordinates: FDOT about the
+ * spin axis.  The slow turn of the node (NODDOT, 0.4% of FDOT) is left out.
+ */
+export function moonSpin(seconds: number): Vec3 {
+  return moonAxes(seconds)[2].map((c) => c * FDOT) as Vec3;
+}
+
 /** A Moon-fixed vector in inertial coordinates at `seconds` after the ephemeris epoch. */
 export function moonFixedToInertial(v: Vec3, seconds: number): Vec3 {
   const [m0, m1, m2] = moonAxes(seconds);

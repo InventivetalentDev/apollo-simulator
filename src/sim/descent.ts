@@ -341,6 +341,7 @@ export function prepareLunarModule(lm: LunarModule, state: DescentState): void {
   lm.rate = [0, 0, 0];
   lm.orbiting = false;
   lm.landed = false;
+  lm.touchdown = null;
   lm.controls.mode = 'auto';
   lm.engine.armed = true;
   lm.engine.propellant = DESCENT_PROPELLANT;
@@ -392,6 +393,7 @@ export function loadDescent(agc: AGC, lm: LunarModule, address: AddressOf, state
 
   lm.position = [...state.lmPosition];
   lm.velocity = [...state.lmVelocity];
+  lm.site = [...state.site];
   lm.surfaceRadius = Math.hypot(...state.site);
   lm.ephemerisTime = SETUP_TIME + ephemerisOffset();
   lm.orbiting = true;

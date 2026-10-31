@@ -90,13 +90,14 @@ scroll to zoom.
 
 ### Powered descent
 
-The original P63 can fly Apollo 11's braking phase, from engine ignition
-to high gate, about 2 km above the Moon.
+The original P63, P64 and P65 can fly Apollo 11's landing, from engine
+ignition to touchdown at Tranquility Base.
 
-1. Click **Set up powered descent**. The computer restarts at 102:27:00
-   mission time: the LM is in its descent orbit 18 km up, the IMU is aligned
-   to the landing site, and memory holds the 1969 pre-launch erasable load.
-   The DSKY then clears the restart alarm and loads the autopilot data.
+1. Click **Land on the Moon** at the top of the page. The computer restarts
+   at 102:27:00 mission time: the LM is in its descent orbit 18 km up, the
+   IMU is aligned to the landing site, and memory holds the 1969 pre-launch
+   erasable load. The DSKY then clears the restart alarm and loads the
+   autopilot data. **Set up powered descent** in "Try it" does the same.
 2. In the checklist at the top of the Lunar Module panel, click **Start
    P63**. P63 computes the ignition time, about 102:32:50 (Apollo 11 lit at
    102:33:05).
@@ -112,23 +113,34 @@ to high gate, about 2 km above the Moon.
      attitude. The DSKY then stays blank for about 5 minutes.
    - **V99** flashing, 35 s before ignition (enable the engine?): press PRO.
 4. Watch the burn. The jets fire for ullage, the engine lights at minimum
-   thrust, and 26 s later it goes to full throttle. The computer throttles
-   down about 6½ minutes in, and P64 starts at high gate.
+   thrust, and 26 s later it goes to full throttle. About 6 minutes in, the
+   computer turns the LM windows up, the landing radar sees the ground, and
+   the ALT and VEL lamps go out.
+5. Key **V57** (VERB 5 7 ENTR), or click **Key it in for me**. From then on
+   the computer corrects its altitude and velocity with the radar's.
+6. P64 starts at high gate, about 2 km up, and pitches the LM up. Near the
+   ground P65 takes over and lets the LM down at 1 m/s. At the contact
+   light, click **Stop the engine**. The LM lands about 12 minutes after
+   ignition, within about 100 m of the planned site.
 
 While the crew waits, for the turn, for ignition, or during the burn, the
 checklist's **Fast-forward** button runs the simulation at 20× until the
 next step, then returns to the speed you had.
 
-During the descent the panel shows the LM's true altitude, speeds, thrust
-and propellant. The DSKY shows what the computer believes, for example in
-noun 63. The 3D view follows the LM: up is away from the Moon, the ground
-moves past below, and the descent engine's plume grows with thrust.
+During the descent the panel shows the LM's true altitude, its speeds
+against the ground, thrust and propellant. The DSKY shows what the computer
+believes, for example in noun 63. The 3D view follows the LM: up is away
+from the Moon, the ground moves past below, and the descent engine's plume
+grows with thrust.
 
-The landing radar answers but has no data, so the software navigates on
-the IMU alone and lights the ALT and VEL lamps. Its altitude drifts about
-50 m high by high gate, because the computer's powered-flight gravity treats
-the Moon as a sphere and the landing radar was there to correct it. Without
-the radar, the LM reaches the ground before the computer expects it.
+The landing radar measures the slant range along its altitude beam and the
+velocity against the turning ground along its antenna's three axes. Its
+geometry and scale factors are the ones the software uses: the antenna
+angles from the pad load, the altitude beam direction, and the feet per
+count of each reading. Without V57 the computer navigates on the IMU alone.
+Its altitude then drifts about 50 m high by high gate, because its
+powered-flight gravity treats the Moon as a sphere, and the LM reaches the
+ground before the computer expects it.
 
 <img src="docs/screenshot-phone.png" alt="The simulator on a phone" width="300" />
 
@@ -179,7 +191,11 @@ own coasting integration models: the point mass, J2 and J3 from fixed
 memory, and the C22 and C31 bulge terms from Apollo 11's pad load. The Moon
 turns as the software's MOONMX routine says. The descent engine takes its
 on and off commands from channel 11, its throttle from THRUST counter
-pulses, and its trim gimbal from channel 12. The powered-descent setup
+pulses, and its trim gimbal from channel 12. The landing radar starts a
+read when the software sets channel 13, puts its count in RNRAD and ends
+with a RADARUPT, and reports data good, range scale and antenna position in
+channel 33. On the surface the legs hold the LM, and the accelerometers
+feel the ground pushing up. The powered-descent setup
 (`src/sim/descent.ts`) loads the pre-launch erasable values from the Grumman
 LM Data Book table "LGC Prelaunch Erasable Load (Luminary 99)" (11 June
 1969). The state vectors were uplinked during the flight, so the setup
@@ -219,15 +235,14 @@ to the right in a few upstream lines.
 
 ## Not simulated yet
 
-The LM orbits and flies the braking phase of the descent. Not simulated:
-landing-radar data (the radar answers with "no data"), the 1201 and 1202
-alarms Apollo 11 met, terrain, the ascent engine, aborts, the crew's
-throttle and engine-arm switch, and the rendezvous radar. The Command
+The LM orbits and lands. Not simulated: terrain (the surface is a sphere
+through the landing site), the 1201 and 1202 alarms Apollo 11 met, landing
+site redesignation, the ascent engine, aborts, the crew's throttle and
+rate-of-descent switch, and the rendezvous radar. The Command
 Module has no spacecraft model at all. The jets sit level with the centre of
 mass, so translating does not disturb the attitude, and the IMU never drifts
 or tumbles in gimbal lock. Possible next steps:
 
-- landing-radar range and velocity, so P64 and P65 can land
 - the rendezvous radar's cycle stealing, which caused the 1201 and 1202 alarms
 - an FDAI (attitude ball) and the attitude-error needles the DAP drives
 - decoding the digital downlink (telemetry) the software sends 50 times a second
