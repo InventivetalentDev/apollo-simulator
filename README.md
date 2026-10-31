@@ -63,7 +63,15 @@ Click the keys or type on your keyboard: digits, `V` (VERB), `N` (NOUN),
 
 With the LM program selected, the panel under the DSKY is the spacecraft:
 the 16 RCS jets seen from above (lit while firing), the IMU gimbal angles,
-the body rates, the PGNS mode switch and a hand controller.
+the body rates, the attitude ball (FDAI), the PGNS mode switch and a hand
+controller.
+
+The attitude ball stands for the stable member, which holds still in space
+while the LM turns around it; its centre shows where the front of the LM
+points. The needles across the ball are the attitude errors the flight
+software sends through the CDU error counters (its NEEDLER routine), and the
+pointers outside the ball show the body rates. Full scale is 5° of error and
+5°/s of rate.
 
 The 3D view above the listing shows the LM at its current attitude against
 the stars, with a plume on each jet while it fires. Drag to look around and
@@ -179,7 +187,8 @@ channels and counter pulses, as in the real spacecraft. The jets fire from
 the bits the software writes to channels 5 and 6. The IMU's angle counters
 (CDUs) count gimbal motion into CDUX, CDUY and CDUZ, the accelerometers count
 into the PIPA registers, and the computer drives the gimbals (coarse align)
-and torques the gyros through its output counters. The mode switch, IMU
+and torques the gyros through its output counters. The same counters drive
+the FDAI's error needles while channel 12 bit 6 enables them. The mode switch, IMU
 switch and hand controller appear in channels 30, 31 and the RHC counters.
 The physical constants come from the flight software itself: 100 lbf jets
 at a 5.5 ft lever arm, moments of inertia from the DAP's own curve fits
@@ -244,5 +253,4 @@ mass, so translating does not disturb the attitude, and the IMU never drifts
 or tumbles in gimbal lock. Possible next steps:
 
 - the rendezvous radar's cycle stealing, which caused the 1201 and 1202 alarms
-- an FDAI (attitude ball) and the attitude-error needles the DAP drives
 - decoding the digital downlink (telemetry) the software sends 50 times a second

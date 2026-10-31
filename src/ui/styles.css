@@ -1118,6 +1118,23 @@ kbd {
   color: var(--muted);
   font-size: 13px;
 }
+/* The attitude ball (FDAI), drawn on a square canvas */
+.fdai {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.fdai-ball {
+  display: block;
+  width: min(100%, 248px);
+  aspect-ratio: 1;
+}
+.fdai figcaption {
+  font-size: 12px;
+  line-height: 1.4;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .spinner {

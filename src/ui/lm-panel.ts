@@ -1,14 +1,15 @@
 // The LM panel: the RCS jets seen from above, the IMU gimbal angles and body
-// rates, the PGNS mode switch, the IMU switch, and a hand controller
+// rates, the attitude ball (FDAI), the PGNS mode switch, the IMU switch, and a hand controller
 // (on-screen buttons or the keyboard).  In orbit it also shows the LM's true
 // altitude, speeds, thrust and propellant, and the powered-descent checklist.
 
 import type { AGC } from '../agc/cpu.ts';
 import type { DskyKey } from '../agc/dsky.ts';
-import { DEG, type Vec3 } from '../sim/attitude.ts';
+import { DEG, gimbalMatrix, type Vec3 } from '../sim/attitude.ts';
 import { JETS, type LunarModule, type ModeControl } from '../sim/lm.ts';
 import { displayKeys } from './commands.ts';
 import { DESCENT_STEPS, DescentChecklist, type DescentStep } from './descent-checklist.ts';
+import { Fdai } from './fdai.ts';
 
 /** Stick deflection for a held key or button; Shift gives full deflection. */
 const STICK_NORMAL = 0.5;
@@ -147,6 +148,7 @@ export class LmPanel {
   private readonly jetEls: SVGGElement[] = [];
   private readonly glowUntil = new Float64Array(16);
   private readonly lastJetSeconds = new Float64Array(16);
+  private readonly fdai: Fdai;
   private readonly els: {
     status: HTMLElement;
     gimbals: HTMLElement[];
@@ -211,6 +213,10 @@ export class LmPanel {
           </div>
         </div>
       </div>
+      <figure class="fdai">
+        <canvas class="fdai-ball" role="img" aria-label="Attitude ball (FDAI), with the computer's attitude-error needles and the rate needles"></canvas>
+        <figcaption class="hint">The ball holds still in space while the LM turns around it: its centre shows where the front of the LM points. The needles across the ball come from the original software and point the way to turn to reach the attitude it wants. The pointers outside show how fast the LM turns.</figcaption>
+      </figure>
       <div class="readout descent" hidden>
         <span class="k">Descent <small>true values; the DSKY shows the computer's</small></span>
         <div class="trio five">
@@ -241,6 +247,7 @@ export class LmPanel {
       imu: host.querySelector('#craft-imu')!,
     };
     for (const g of host.querySelectorAll<SVGGElement>('.jet')) this.jetEls[Number(g.dataset.jet)] = g;
+    this.fdai = new Fdai(host.querySelector('.fdai-ball')!);
 
     host.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
@@ -301,6 +308,7 @@ export class LmPanel {
     const g = lm.gimbals;
     [g.outer, g.inner, g.middle].forEach((a, i) => (this.els.gimbals[i].textContent = fmtAngle(a)));
     lm.rate.forEach((r, i) => (this.els.rates[i].textContent = fmtRate(r)));
+    this.fdai.draw(gimbalMatrix(g), lm.errorNeedles, lm.rate);
     this.litJets = 0;
     for (let j = 0; j < 16; j++) {
       if (lm.jetSeconds[j] > this.lastJetSeconds[j] || lm.jets & (1 << j)) this.glowUntil[j] = now + JET_GLOW_MS;

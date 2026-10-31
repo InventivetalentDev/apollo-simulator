@@ -553,6 +553,9 @@ export class LunarModule implements Peripheral {
   /** Caging and the computer's zero-and-coarse command drive the gimbals to zero. */
   private imuHardware(): void {
     const ch12 = this.agc.channels[0o12];
+    // With the error counters disabled (channel 12 bit 6) the CDUs' converters
+    // read zero, so the FDAI's error needles centre.
+    if (!(ch12 & 0o40)) this.errorNeedles.fill(0);
     const caging = this.controls.imuCage || (this.controls.imuOperate && (ch12 & 0o30) === 0o30);
     if (!caging) return;
     const g = this.gimbals;
