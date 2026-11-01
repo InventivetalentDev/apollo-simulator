@@ -14,6 +14,11 @@
   --lamp-white: #f1efe2;
   --lamp-amber: #ffc24a;
   --dsky-case: #5b6064;
+  /* The panels are lettered like the spacecraft's: white lines round each group of
+     controls, the group's name set into the top line, and white nomenclature. */
+  --scribe: rgb(241 239 226 / 0.24);
+  --label: color-mix(in srgb, var(--lamp-white) 70%, var(--bg));
+  --well: #0c0e10;
   --font-display: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
   --font-body: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
@@ -70,7 +75,7 @@ kbd {
   font: 12px var(--font-mono);
   padding: 0 4px;
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--panel-raised);
 }
 kbd + kbd {
@@ -102,7 +107,7 @@ kbd + kbd {
   align-items: center;
   gap: 12px 24px;
   padding: 12px 20px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--scribe);
   background: var(--panel);
 }
 .brand {
@@ -124,7 +129,7 @@ kbd + kbd {
 .program-switch {
   display: flex;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   overflow: hidden;
 }
 .program-switch button {
@@ -167,9 +172,15 @@ kbd + kbd {
 .speed select {
   padding: 6px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--panel-raised);
   cursor: pointer;
+}
+/* Buttons are lettered like the DSKY's keys */
+.ctl {
+  font: 600 15px/1.2 var(--font-display);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 .topbar .ctl,
 .speed select,
@@ -191,8 +202,9 @@ kbd + kbd {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
-  font: 600 15px var(--font-body);
-  padding: 7px 16px;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 7px 18px;
 }
 .ctl.land:hover:not(:disabled) {
   border-color: var(--accent);
@@ -210,8 +222,15 @@ kbd + kbd {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--label);
+  font: 600 13px var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.speed select {
+  font: 14px var(--font-body);
+  letter-spacing: normal;
+  text-transform: none;
 }
 .speed select {
   padding: 5px 8px;
@@ -223,7 +242,7 @@ kbd + kbd {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
-  gap: 16px;
+  gap: 20px;
   padding: 16px 20px 20px;
 }
 .left,
@@ -231,7 +250,7 @@ kbd + kbd {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
 }
 /* The DSKY stays put; the panels under it scroll on their own. */
 .left {
@@ -247,8 +266,9 @@ kbd + kbd {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  border-radius: 10px;
+  gap: 26px;
+  /* Room above the first panel for the name in its top line */
+  padding-top: 10px;
 }
 /* On shorter windows the DSKY shrinks, so the panels under it keep about 200 px. */
 @media (min-width: 901px) and (max-height: 859px) {
@@ -271,17 +291,41 @@ kbd + kbd {
     overflow: visible;
   }
 }
+/* A panel is a group of controls inside a white line, as on the spacecraft,
+   with its name set into the top line. The page itself is the panel's paint. */
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  position: relative;
+  border: 1px solid var(--scribe);
+  border-radius: 3px;
 }
 .panel h2 {
   margin: 0;
-  font: 600 15px var(--font-display);
-  letter-spacing: 0.1em;
+  font: 600 15px/18px var(--font-display);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--lamp-white);
+}
+.panel > h2:not(.view3d-title),
+.panel > .craft-head {
+  position: absolute;
+  top: -10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+}
+.panel > h2:not(.view3d-title) {
+  right: auto;
+  padding: 0 6px;
+  background: var(--bg);
+}
+.panel > .craft-head > * {
+  padding: 0 6px;
+  background: var(--bg);
+  pointer-events: auto;
 }
 
 /* Short forms: a dotted underline, and their meaning on hover */
@@ -516,7 +560,7 @@ abbr[title] {
 
 /* ---- Commands */
 .commands {
-  padding: 14px 16px 16px;
+  padding: 20px 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -528,11 +572,13 @@ abbr[title] {
 }
 #command-list {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 4px -8px 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+}
+#command-list li + li {
+  border-top: 1px solid var(--line);
 }
 .cmd {
   width: 100%;
@@ -540,17 +586,17 @@ abbr[title] {
   grid-template-columns: 1fr auto;
   gap: 2px 12px;
   text-align: left;
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-raised);
+  padding: 9px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
   cursor: pointer;
 }
 .cmd:hover {
-  border-color: var(--muted);
+  background: var(--panel);
 }
 .cmd:active {
-  background: var(--panel);
+  background: var(--panel-raised);
 }
 .cmd .title {
   font-weight: 600;
@@ -644,7 +690,7 @@ abbr[title] {
 
 /* ---- About */
 .about {
-  padding: 14px 16px 16px;
+  padding: 20px 16px 16px;
 }
 .about a {
   color: var(--text);
@@ -668,29 +714,33 @@ abbr[title] {
 
 /* ---- CPU state */
 .cpu {
-  padding: 12px 14px;
+  padding: 18px 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .cpu-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 2.4fr) repeat(6, minmax(70px, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(180px, 2.4fr) minmax(96px, 1.2fr) repeat(5, minmax(64px, 1fr));
+  gap: 10px 0;
 }
 .stat {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--panel-raised);
+  padding: 1px 10px;
+  border-left: 1px solid var(--line);
+}
+/* No line before the first readout of each row */
+.stat:first-child {
+  padding-left: 2px;
+  border-left: 0;
 }
 .stat .k {
-  font: 600 11px var(--font-display);
+  font: 600 12px var(--font-display);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--label);
 }
 .stat .v {
   font-size: 15px;
@@ -737,10 +787,10 @@ abbr[title] {
   gap: 4px 12px;
 }
 .rupts-k {
-  font: 600 11px var(--font-display);
+  font: 600 12px var(--font-display);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--label);
 }
 /* The pairs wrap one by one, beside the caption */
 .rupts {
@@ -748,12 +798,15 @@ abbr[title] {
 }
 .chip {
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 2px;
   border: 1px solid var(--line);
   font: 500 12px var(--font-mono);
   color: var(--muted);
 }
 .chip.rate {
+  /* A readout, not a control: no box */
+  padding-left: 0;
+  border-color: transparent;
   color: var(--text);
 }
 #cpu-rate {
@@ -764,14 +817,16 @@ abbr[title] {
   font-variant-numeric: tabular-nums;
 }
 /* Status lamps: always in place, lit while their state holds */
+/* Lettered and lit like the DSKY's own lamps */
 .status-lamp {
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  font: 500 11px var(--font-mono);
+  padding: 3px 9px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background: #2a2d2f;
+  font: 600 12px var(--font-display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgb(141 152 161 / 0.55);
+  color: #82878a;
   transition:
     color 0.2s,
     background-color 0.2s,
@@ -779,7 +834,7 @@ abbr[title] {
     box-shadow 0.2s;
 }
 .status-lamp b {
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .status-lamp.on {
@@ -861,7 +916,7 @@ abbr[title] {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 12px;
+  padding: 16px 12px 10px;
 }
 .fdai[hidden] {
   display: none;
@@ -885,7 +940,6 @@ abbr[title] {
   min-height: 180px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 /* The right column keeps the listing at least 256 px tall (about eight lines);
    when the window is too short for that, the column scrolls as one. */
@@ -893,6 +947,15 @@ abbr[title] {
   .right {
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+  /* Both columns scroll, so each keeps room above its first panel for the name in
+     its top line; the tops of the DSKY and the first panel stay level. */
+  .layout {
+    padding-top: 6px;
+  }
+  .left,
+  .right {
+    padding-top: 10px;
   }
   .source {
     min-height: 256px;
@@ -903,14 +966,14 @@ abbr[title] {
   flex-wrap: wrap;
   gap: 8px 12px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 16px 12px 10px;
   border-bottom: 1px solid var(--line);
 }
 .source-head select,
 .source-head input {
   padding: 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--panel-raised);
 }
 /* Sized so file menu, label search and Follow share one row on a wide window */
@@ -953,19 +1016,25 @@ abbr[title] {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--label);
+  font: 600 13px var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 .follow select {
   padding: 5px 8px;
+  font: 14px var(--font-body);
+  letter-spacing: normal;
+  text-transform: none;
 }
 .code-scroll {
   position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
-  background: #0f1215;
+  background: var(--well);
+  box-shadow: inset 0 2px 6px rgb(0 0 0 / 0.6);
 }
 .code-spacer {
   width: 1px;
@@ -1110,7 +1179,7 @@ abbr[title] {
 
 /* ---- Lunar Module panel: jets seen from above, gimbals, rates, switches, hand controller */
 .craft {
-  padding: 12px 16px 14px;
+  padding: 20px 16px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1118,15 +1187,9 @@ abbr[title] {
 .craft[hidden] {
   display: none;
 }
-.craft-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-}
 .craft-status {
   color: var(--el);
-  font: 500 13px var(--font-mono);
+  font: 500 13px/18px var(--font-mono);
   text-align: right;
 }
 .craft-body {
@@ -1190,7 +1253,7 @@ abbr[title] {
 .readout .k {
   display: block;
   margin-bottom: 3px;
-  color: var(--muted);
+  color: var(--label);
   font: 600 12px var(--font-display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1209,7 +1272,7 @@ abbr[title] {
   display: flex;
   flex-direction: column;
   padding: 3px 6px;
-  border-radius: 4px;
+  border-radius: 2px;
   background: var(--el-dim);
 }
 .trio b {
@@ -1229,27 +1292,36 @@ abbr[title] {
 }
 /* The powered-descent checklist: what the DSKY asks now and which key answers it */
 .checklist {
-  padding: 8px 10px 9px;
-  border: 1px solid rgb(232 163 61 / 0.45);
-  border-radius: 6px;
-  background: var(--panel-raised);
+  position: relative;
+  margin-top: 8px;
+  padding: 14px 12px 10px;
+  border: 1px solid rgb(232 163 61 / 0.55);
+  border-radius: 3px;
 }
 .checklist[hidden],
 .checklist [hidden] {
   display: none;
 }
 .checklist-head {
+  position: absolute;
+  top: -10px;
+  left: 6px;
+  right: 6px;
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
-  color: var(--muted);
-  font-size: 12px;
+  color: var(--label);
+  font: 12px/18px var(--font-mono);
+}
+.checklist-head > * {
+  padding: 0 6px;
+  background: var(--bg);
 }
 .checklist .k {
   color: var(--accent);
-  font: 600 12px var(--font-display);
-  letter-spacing: 0.08em;
+  font: 600 13px/18px var(--font-display);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .checklist p {
@@ -1284,7 +1356,6 @@ abbr[title] {
   padding: 4px 12px;
   border-color: var(--accent);
   color: var(--accent);
-  font: 600 14px var(--font-body);
 }
 .checklist-do[aria-pressed='true'] {
   background: var(--accent);
@@ -1324,7 +1395,7 @@ abbr[title] {
 .segmented {
   display: flex;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   overflow: hidden;
 }
 .segmented button {
@@ -1365,7 +1436,7 @@ abbr[title] {
 }
 .stick .ctl {
   padding: 6px 4px;
-  font-size: 13px;
+  font-size: 14px;
   touch-action: none;
   user-select: none;
 }
@@ -1403,6 +1474,10 @@ abbr[title] {
   }
   .stat.wide {
     grid-column: span 2;
+  }
+  .stat:nth-child(4) {
+    padding-left: 2px;
+    border-left: 0;
   }
 }
 /* Two columns on a mid-size window: the rates keep to one line, so the caption is for screen readers only. */
@@ -1467,6 +1542,15 @@ abbr[title] {
   }
   .stat.wide {
     grid-column: 1 / -1;
+  }
+  .stat:nth-child(4) {
+    padding-left: 10px;
+    border-left: 1px solid var(--line);
+  }
+  .stat:nth-child(2),
+  .stat:nth-child(5) {
+    padding-left: 2px;
+    border-left: 0;
   }
   .craft-body {
     grid-template-columns: minmax(0, 1fr);
