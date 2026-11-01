@@ -204,7 +204,7 @@ function renderCommands(vehicle: 'LM' | 'CM'): void {
 /** The loaded program's alarm list, each code with what it means, what sets it, and what the computer does. */
 function renderAlarms(): void {
   const alarms = alarmList();
-  els.alarmCount.textContent = `${programName()} has ${alarms.length}; this list comes from its own listing.`;
+  els.alarmCount.textContent = `${programName()} has ${alarms.length} alarm codes; this list comes from its own listing.`;
   els.alarms.innerHTML = alarms
     .map((a) => {
       const words = [a.code, ...a.variants.map((v) => `${v.text} ${v.setBy}`), a.note].join(' ').toLowerCase();

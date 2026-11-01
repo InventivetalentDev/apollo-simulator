@@ -51,8 +51,9 @@ Click the keys or type on your keyboard: digits, `V` (VERB), `N` (NOUN),
 over a key, a lamp, or a dotted-underlined short form such as T4RUPT or V99
 to see what it means; verb and noun names come from the loaded program's
 own lists. So do the alarm codes: when the PROG lamp lights, key VERB 05
-NOUN 09 and hover over a code on the DSKY, or search the "Alarm codes"
-panel under "Try it". The "Try it" panel has ready-made sequences:
+NOUN 09 and hover over a code on the DSKY, or search the Alarm codes tab of
+the Guide. The "Try it" chips under the DSKY key the most useful commands in
+one click, and the Guide beside them has every ready-made sequence:
 
 | Keys                  | What it does                                                            |
 | --------------------- | ----------------------------------------------------------------------- |
@@ -69,11 +70,13 @@ With the LM program selected, the panel under the DSKY is the spacecraft:
 the 16 RCS jets seen from above (lit while firing), the IMU gimbal angles,
 the body rates, the PGNS mode switch and a hand controller.
 
-The 3D view above the listing shows the LM at its current attitude against
-the stars, with a plume on each jet while it fires. Drag to look around and
-scroll to zoom.
+The right column shows either the Moon or the Computer (registers and
+listing); "Land on the Moon" turns it to the Moon. There the 3D view shows the
+LM at its current attitude against the stars, with a plume on each jet while
+it fires. Drag to look around and scroll to zoom; on a touch screen, swipe
+sideways and pinch.
 
-Beside it, the attitude ball (FDAI) stands for the stable member, which
+In its corner, the attitude ball (FDAI) stands for the stable member, which
 holds still in space while the LM turns around it; its centre shows where
 the front of the LM points. The needles across the ball are the attitude
 errors the flight software sends through the CDU error counters (its NEEDLER
@@ -83,7 +86,7 @@ is 5° of error and 5°/s of rate.
 1. Wait about 12 s after the page loads. The software zeroes the IMU's angle
    counters and lets them count up to the gimbal angles, then wakes the
    digital autopilot (DAP). The status changes to "Autopilot: attitude hold".
-2. Click **Load the autopilot data** in "Try it". Verb 48 gives the DAP its
+2. Click **Load the autopilot data** in the Guide. Verb 48 gives the DAP its
    settings and the LM weight. Without the weight it misjudges its jets.
 3. Click **Disturb**. The LM starts turning; the DAP fires jets to stop it.
 4. Fly: hold <kbd>↑</kbd> <kbd>↓</kbd> (pitch), <kbd>←</kbd> <kbd>→</kbd>
@@ -108,8 +111,8 @@ ignition to touchdown at Tranquility Base.
    at 102:27:00 mission time: the LM is in its descent orbit 18 km up, the
    IMU is aligned to the landing site, and memory holds the 1969 pre-launch
    erasable load. The DSKY then clears the restart alarm and loads the
-   autopilot data. **Set up powered descent** in "Try it" does the same.
-2. In the checklist at the top of the Lunar Module panel, click **Start
+   autopilot data. **Set up powered descent** in the Guide does the same.
+2. In the descent checklist under the DSKY, click **Start
    P63**. P63 computes the ignition time, about 102:32:50 (Apollo 11 lit at
    102:33:05). Start it by 102:30:15; the checklist counts down to then.
    Later than that, the computer will most likely slip the ignition (alarm
@@ -146,7 +149,7 @@ checklist asks you to press a key, the simulation runs in real time until
 you do, then returns to the speed you had: at 100× a question would be gone
 before you could read it. A speed you choose while a question waits stays.
 
-During the descent the panel shows the LM's true altitude, its speeds
+During the descent the 3D view's corner shows the LM's true altitude, its speeds
 against the ground, thrust and propellant. The DSKY shows what the computer
 believes, for example in noun 63. The 3D view follows the LM: up is away
 from the Moon, the ground moves past below, and the descent engine's plume
@@ -222,7 +225,8 @@ LM Data Book table "LGC Prelaunch Erasable Load (Luminary 99)" (11 June
 builds a descent orbit through the landing site instead.
 
 **Web page (`src/ui`).** The DSKY, a listing of the source in the 1969 format
-(location, octal words, source line), and the computer's state. "Follow: Jobs"
+(location, octal words, source line), and the computer's state, on the
+Computer side of the right column. "Follow: Last job"
 tracks the code the Executive is running: key in a verb and the listing jumps
 into PINBALL, the DSKY program. Inside the interpreter it shows the interpretive
 instruction being executed. Lines that ran in the last moment get a green
