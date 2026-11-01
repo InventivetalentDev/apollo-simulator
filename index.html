@@ -53,10 +53,11 @@
         <section class="left">
           <div id="dsky-host"></div>
           <div class="left-scroll">
+            <section class="panel checklist" id="checklist" aria-labelledby="checklist-label" hidden></section>
             <section class="panel try" aria-labelledby="try-title">
               <h2 id="try-title">Try it</h2>
               <div class="quick">
-                <div class="chips" id="chips"></div>
+                <div class="quick-cmds" id="quick-cmds"></div>
                 <button type="button" class="ctl guide-open" id="guide-open" aria-controls="guide" aria-expanded="false">Guide</button>
               </div>
               <p class="cmd-note" id="cmd-note" role="status" hidden></p>
@@ -69,75 +70,92 @@
           </div>
         </section>
 
-        <section class="right">
-          <section class="panel cpu" aria-labelledby="cpu-title">
-            <h2 id="cpu-title">Computer state</h2>
-            <div class="cpu-grid">
-              <div class="stat wide">
-                <span class="k">Running</span>
-                <span class="v" id="cpu-routine">—</span>
-                <span class="sub" id="cpu-location">—</span>
-              </div>
-              <div class="stat"><span class="k">Clock</span><span class="v mono" id="cpu-time">000:00:00</span></div>
-              <div class="stat"><span class="k" data-abbr>Z</span><span class="v mono" id="reg-z">—</span></div>
-              <div class="stat"><span class="k" data-abbr>A</span><span class="v mono" id="reg-a">—</span></div>
-              <div class="stat"><span class="k" data-abbr>L</span><span class="v mono" id="reg-l">—</span></div>
-              <div class="stat"><span class="k" data-abbr>Q</span><span class="v mono" id="reg-q">—</span></div>
-              <div class="stat"><span class="k" data-abbr>BB</span><span class="v mono" id="reg-bb">—</span></div>
+        <section class="right" data-deck="moon">
+          <!-- The right side shows either the spacecraft or the computer's insides, not both squeezed. -->
+          <div class="deck-bar">
+            <div class="tabs deck-tabs" role="tablist" aria-label="Right side">
+              <button type="button" role="tab" id="tab-moon" aria-controls="deck-moon" aria-selected="true">Moon</button>
+              <button type="button" role="tab" id="tab-computer" aria-controls="deck-computer" aria-selected="false" tabindex="-1">Computer</button>
             </div>
-            <div class="cpu-row">
-              <div class="chips" id="cpu-chips">
-                <span class="chip rate"><b id="cpu-rate">—</b> <span data-abbr>instr/s</span></span>
-                <span class="status-lamp" id="lamp-inhint" data-abbr>INHINT</span>
-                <span class="status-lamp" id="lamp-restarts" title="Restarts since power-up. Each one also lights the DSKY’s RESTART lamp.">Restarts <b id="cpu-restarts">0</b></span>
-                <span class="status-lamp" id="lamp-paused" title="The computer is paused. Run starts it again.">Paused</span>
-                <span class="status-lamp" id="lamp-speed" title="Simulation speed: lit when it is not real time.">Speed <b id="cpu-speed">1×</b></span>
-              </div>
-              <div class="rupts-wrap">
-                <span class="rupts-k"><span aria-hidden="true">Interrupts/s</span><span class="visually-hidden">Interrupts per second:</span></span>
-                <div class="rupts" id="cpu-rupts"></div>
-              </div>
-            </div>
-          </section>
-
-          <div class="views">
-            <section class="panel view3d" id="view3d" aria-labelledby="view3d-title" hidden></section>
-            <section class="panel fdai" id="fdai" aria-labelledby="fdai-title" hidden></section>
+            <p class="running-line" title="The code the computer is running now. The Computer tab shows it in the listing.">
+              <span class="k">Running</span> <b id="run-routine">—</b> <span id="run-location"></span>
+              <span class="mono run-time" id="run-time"></span>
+            </p>
           </div>
 
-          <section class="panel source" aria-labelledby="source-title">
-            <h2 id="source-title">Source code</h2>
-            <div class="source-head">
-              <label class="visually-hidden" for="source-file">Source file</label>
-              <select id="source-file"></select>
-              <a id="source-github" class="gh-link" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
-              <div class="search">
-                <label class="visually-hidden" for="source-search">Jump to label</label>
-                <input id="source-search" list="source-symbols" placeholder="Label, e.g. BURNBABY" autocomplete="off" spellcheck="false" />
-                <datalist id="source-symbols"></datalist>
-                <span id="source-search-status" role="status"></span>
-              </div>
-              <label class="follow" for="follow">Follow
-                <select id="follow">
-                  <option value="jobs" selected>Jobs</option>
-                  <option value="all">Every instruction</option>
-                  <option value="off">Off</option>
-                </select>
-              </label>
+          <div class="deck deck-moon" id="deck-moon" role="tabpanel" aria-labelledby="tab-moon">
+            <div class="stage">
+              <section class="panel view3d" id="view3d" aria-labelledby="view3d-title" hidden></section>
+              <div class="readout descent" id="descent" hidden></div>
+              <section class="fdai" id="fdai" aria-labelledby="fdai-title" hidden></section>
             </div>
-            <div class="code-scroll" tabindex="0" aria-label="Listing">
-              <div class="code-spacer"></div>
-              <div class="code-rows"></div>
-              <div class="loading" id="loading">
-                <div class="loading-box">
-                  <div class="spinner" aria-hidden="true"></div>
-                  <p id="loading-text" role="status">Loading the original source…</p>
-                  <button type="button" id="loading-retry" class="ctl" hidden>Try again</button>
+          </div>
+
+          <div class="deck deck-computer" id="deck-computer" role="tabpanel" aria-labelledby="tab-computer">
+            <section class="panel cpu" aria-labelledby="cpu-title">
+              <h2 id="cpu-title">Computer state</h2>
+              <div class="cpu-grid">
+                <div class="stat wide">
+                  <span class="k">Running</span>
+                  <span class="v" id="cpu-routine">—</span>
+                  <span class="sub" id="cpu-location">—</span>
+                </div>
+                <div class="stat"><span class="k">Clock</span><span class="v mono" id="cpu-time">000:00:00</span></div>
+                <div class="stat"><span class="k" data-abbr>Z</span><span class="v mono" id="reg-z">—</span></div>
+                <div class="stat"><span class="k" data-abbr>A</span><span class="v mono" id="reg-a">—</span></div>
+                <div class="stat"><span class="k" data-abbr>L</span><span class="v mono" id="reg-l">—</span></div>
+                <div class="stat"><span class="k" data-abbr>Q</span><span class="v mono" id="reg-q">—</span></div>
+                <div class="stat"><span class="k" data-abbr>BB</span><span class="v mono" id="reg-bb">—</span></div>
+              </div>
+              <div class="cpu-row">
+                <div class="chips" id="cpu-chips">
+                  <span class="chip rate"><b id="cpu-rate">—</b> <span data-abbr>instr/s</span></span>
+                  <span class="status-lamp" id="lamp-inhint" data-abbr>INHINT</span>
+                  <span class="status-lamp" id="lamp-restarts" title="Restarts since power-up. Each one also lights the DSKY’s RESTART lamp.">Restarts <b id="cpu-restarts">0</b></span>
+                  <span class="status-lamp" id="lamp-paused" title="The computer is paused. Run starts it again.">Paused</span>
+                  <span class="status-lamp" id="lamp-speed" title="Simulation speed: lit when it is not real time.">Speed <b id="cpu-speed">1×</b></span>
+                </div>
+                <div class="rupts-wrap">
+                  <span class="rupts-k"><span aria-hidden="true">Interrupts/s</span><span class="visually-hidden">Interrupts per second:</span></span>
+                  <div class="rupts" id="cpu-rupts"></div>
                 </div>
               </div>
-            </div>
-            <footer class="source-foot" id="assembly-status">—</footer>
-          </section>
+            </section>
+
+            <section class="panel source" aria-labelledby="source-title">
+              <h2 id="source-title">Source code</h2>
+              <div class="source-head">
+                <label class="visually-hidden" for="source-file">Source file</label>
+                <select id="source-file"></select>
+                <a id="source-github" class="gh-link" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+                <div class="search">
+                  <label class="visually-hidden" for="source-search">Jump to label</label>
+                  <input id="source-search" list="source-symbols" placeholder="Label, e.g. BURNBABY" autocomplete="off" spellcheck="false" />
+                  <datalist id="source-symbols"></datalist>
+                  <span id="source-search-status" role="status"></span>
+                </div>
+                <label class="follow" for="follow">Follow
+                  <select id="follow">
+                    <option value="jobs" selected>Jobs</option>
+                    <option value="all">Every instruction</option>
+                    <option value="off">Off</option>
+                  </select>
+                </label>
+              </div>
+              <div class="code-scroll" tabindex="0" aria-label="Listing">
+                <div class="code-spacer"></div>
+                <div class="code-rows"></div>
+                <div class="loading" id="loading">
+                  <div class="loading-box">
+                    <div class="spinner" aria-hidden="true"></div>
+                    <p id="loading-text" role="status">Loading the original source…</p>
+                    <button type="button" id="loading-retry" class="ctl" hidden>Try again</button>
+                  </div>
+                </div>
+              </div>
+              <footer class="source-foot" id="assembly-status">—</footer>
+            </section>
+          </div>
         </section>
 
         <!-- Opens beside the DSKY, so its keys stay in reach while commands are picked; a sheet from the bottom on phones. -->

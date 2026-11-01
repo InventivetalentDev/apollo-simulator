@@ -39,7 +39,7 @@ export const COMMANDS: Command[] = [
     title: 'Set up powered descent',
     keys: 'RSET V 4 8 E V 2 1 E 2 1 1 0 2 E PRO V 2 1 E + 3 3 2 9 0 E PRO PRO',
     detail:
-      'Restarts the computer at 102:27:00 into Apollo 11: the LM in its descent orbit 18 km above the Moon, the IMU aligned to the landing site, and the 1969 pre-launch erasable load. Then it clears the restart alarm and loads the autopilot data. The checklist in the Lunar Module panel takes it from there. “Land on the Moon” at the top of the page does the same.',
+      'Restarts the computer at 102:27:00 into Apollo 11: the LM in its descent orbit 18 km above the Moon, the IMU aligned to the landing site, and the 1969 pre-launch erasable load. Then it clears the restart alarm and loads the autopilot data. The powered-descent checklist takes it from there. “Land on the Moon” at the top of the page does the same.',
     vehicle: 'LM',
     setup: 'descent',
   },
@@ -47,7 +47,7 @@ export const COMMANDS: Command[] = [
     title: 'Start powered descent (P63)',
     keys: 'V 3 7 E 6 3 E',
     detail:
-      'After the setup. P63 works out when to light the engine (about 102:32:50) and then asks the crew a series of questions on the DSKY. The checklist in the Lunar Module panel shows each question and the key that answers it. The engine lights at minimum thrust and goes to full throttle 26 s later. P64 starts at high gate, about 8 minutes into the burn, and P65 lets the LM down onto the surface. Use the speed menu to shorten the waits.',
+      'After the setup. P63 works out when to light the engine (about 102:32:50) and then asks the crew a series of questions on the DSKY. The powered-descent checklist shows each question and the key that answers it. The engine lights at minimum thrust and goes to full throttle 26 s later. P64 starts at high gate, about 8 minutes into the burn, and P65 lets the LM down onto the surface. Use the speed menu to shorten the waits.',
     vehicle: 'LM',
   },
   {

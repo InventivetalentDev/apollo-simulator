@@ -571,14 +571,14 @@ abbr[title] {
   align-items: flex-start;
   gap: 8px;
 }
-.chips {
+.quick-cmds {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-.ctl.chip,
+.ctl.quick-cmd,
 .ctl.guide-open {
   min-height: 32px;
   padding: 4px 10px;
@@ -1012,24 +1012,116 @@ abbr[title] {
   color: var(--lamp-white);
 }
 
-/* ---- 3D view */
-/* The 3D view and the attitude ball, side by side */
-.views {
-  /* Gives way first when the window is short, so the right column fits without scrolling the page. */
-  flex: 0 1 auto;
-  height: clamp(200px, 32vh, 420px);
-  min-height: 160px;
+/* ---- Right side: the Moon or the computer */
+.right {
+  gap: 12px;
+}
+.deck-bar {
+  flex: none;
   display: flex;
+  align-items: center;
   gap: 16px;
+  min-width: 0;
 }
-.views:not(:has(> :not([hidden]))) {
-  display: none;
+/* A two-way switch, like the spacecraft switch in the top bar */
+.deck-tabs {
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
 }
-.view3d {
-  position: relative;
-  flex: 1 1 0;
+.deck-tabs [role='tab'] {
+  padding: 6px 16px;
+  font-size: 14px;
+}
+.deck-tabs [role='tab'] + [role='tab'] {
+  border-left: 1px solid var(--line);
+}
+.deck-tabs [role='tab'][aria-selected='true'] {
+  background: var(--panel-raised);
+}
+.deck-tabs [role='tab']:focus-visible {
+  outline-offset: -2px;
+}
+/* What the computer is doing, in one line, while the Moon side is shown */
+.running-line {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.running-line .k {
+  flex: none;
+  color: var(--label);
+  font: 600 12px var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.running-line b {
+  flex: none;
+  color: var(--accent);
+  font: 500 14px var(--font-mono);
+}
+#run-location {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+#run-location a {
+  color: var(--text);
+  text-decoration-color: var(--line);
+  text-underline-offset: 2px;
+}
+#run-location a:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+.run-time {
+  flex: none;
+  margin-left: auto;
+  color: var(--text);
+}
+.deck {
+  /* Sized by the column, not by the listing inside it; a panel's own minimum still holds, and the column scrolls past it. */
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.right[data-deck='moon'] .deck-computer,
+.right[data-deck='computer'] .deck-moon,
+.right[data-deck='computer'] .running-line {
+  display: none;
+}
+/* The CM has no 3D view: its right side is the computer only, without the switch. */
+.right[data-vehicle='CM'] .deck-bar,
+.right[data-vehicle='CM'] .deck-moon {
+  display: none;
+}
+.right[data-vehicle='CM'] .deck-computer {
+  display: flex;
+}
+
+/* ---- 3D view, with the attitude ball and the descent readouts set into it */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 260px;
+}
+.view3d {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.view3d[hidden] {
+  display: none;
 }
 .view3d canvas {
   display: block;
@@ -1053,18 +1145,35 @@ abbr[title] {
   pointer-events: none;
   text-shadow: 0 1px 3px rgb(0 0 0 / 0.85);
 }
-
-/* The attitude ball's panel: about as wide as the row is tall, so the ball fills it */
+/* Instruments laid over the view: the panel's paint behind them, so the stars do not run through the figures */
+.stage > .fdai,
+.stage > .descent {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid var(--scribe);
+  border-radius: 3px;
+  background: rgb(11 12 13 / 0.84);
+}
 .fdai {
-  flex: none;
-  width: clamp(220px, 26vh, 300px);
+  right: 12px;
+  bottom: 12px;
+  width: clamp(168px, 24%, 236px);
+  aspect-ratio: 5 / 6;
+  max-height: calc(100% - 24px);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 16px 12px 10px;
+  gap: 2px;
+  padding: 8px 10px 8px;
 }
 .fdai[hidden] {
   display: none;
+}
+.fdai h2 {
+  margin: 0;
+  font: 600 13px/16px var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lamp-white);
 }
 .fdai-ball {
   flex: 1 1 0;
@@ -1077,6 +1186,12 @@ abbr[title] {
   font-size: 12px;
   line-height: 1.35;
   color: var(--muted);
+}
+.stage > .descent {
+  top: 10px;
+  right: 12px;
+  width: min(430px, calc(100% - 150px));
+  padding: 6px 8px 8px;
 }
 
 /* ---- Source listing */
@@ -1446,7 +1561,6 @@ abbr[title] {
 /* The powered-descent checklist: what the DSKY asks now and which key answers it */
 .checklist {
   position: relative;
-  margin-top: 8px;
   padding: 14px 12px 10px;
   border: 1px solid rgb(232 163 61 / 0.55);
   border-radius: 3px;
@@ -1663,8 +1777,9 @@ abbr[title] {
   .left-scroll {
     flex: none;
   }
-  .views {
-    height: clamp(220px, 56vw, 420px);
+  .stage {
+    flex: none;
+    height: clamp(260px, 62vw, 460px);
   }
   .source {
     height: 70vh;
@@ -1672,20 +1787,6 @@ abbr[title] {
   }
   .topbar {
     padding: 12px 16px;
-  }
-}
-@media (max-width: 640px) {
-  .views {
-    height: auto;
-    flex-direction: column;
-  }
-  .view3d {
-    flex: none;
-    height: clamp(220px, 56vw, 420px);
-  }
-  .fdai {
-    width: auto;
-    height: 300px;
   }
 }
 @media (max-width: 460px) {

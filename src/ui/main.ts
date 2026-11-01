@@ -59,7 +59,7 @@ const els = {
   speedShown: $('#cpu-speed'),
   rupts: $('#cpu-rupts'),
   commands: $('#command-list'),
-  chips: $('#chips'),
+  quickCmds: $('#quick-cmds'),
   cmdNote: $('#cmd-note'),
   guide: $<HTMLDialogElement>('#guide'),
   guideOpen: $<HTMLButtonElement>('#guide-open'),
@@ -69,6 +69,13 @@ const els = {
   alarmCount: $('#alarm-count'),
   alarmEmpty: $('#alarm-empty'),
   leftScroll: $('.left-scroll'),
+  right: $('.right'),
+  deckTabs: $('.deck-tabs'),
+  run: {
+    routine: $('#run-routine'),
+    location: $('#run-location'),
+    time: $('#run-time'),
+  },
 };
 
 let machine: Machine | null = null;
@@ -92,7 +99,7 @@ const craft = new LmPanel($('#craft'), {
     els.speed.value = String(speed);
     if (machine) machine.speed = speed;
   },
-}, $('#fdai'));
+}, { fdai: $('#fdai'), descent: $('#descent'), checklist: $('#checklist') });
 let view: LmView | null = null;
 
 const source = new SourceView($('.source'), {
@@ -108,6 +115,59 @@ function typeKeys(keys: DskyKey[]): void {
   if (els.follow.value === 'off') els.follow.value = 'jobs';
 }
 
+// ---- Tab lists: a click or the arrow keys select a tab
+
+function tabList(list: HTMLElement, select: (tab: HTMLButtonElement) => void): void {
+  const tabs = () => [...list.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  list.addEventListener('click', (e) => {
+    const tab = (e.target as HTMLElement).closest<HTMLButtonElement>('[role="tab"]');
+    if (tab) select(tab);
+  });
+  list.addEventListener('keydown', (e) => {
+    const all = tabs();
+    const i = all.indexOf(document.activeElement as HTMLButtonElement);
+    const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: all.length - 1 }[e.key];
+    if (i < 0 || next === undefined) return;
+    e.preventDefault();
+    const tab = all[(next + all.length) % all.length];
+    select(tab);
+    tab.focus();
+  });
+}
+/** Mark `tab` selected in its list and show its panel, hiding the others'. */
+function showTab(tab: HTMLButtonElement): void {
+  for (const t of tab.parentElement!.querySelectorAll<HTMLButtonElement>('[role="tab"]')) {
+    const on = t === tab;
+    t.setAttribute('aria-selected', String(on));
+    t.tabIndex = on ? 0 : -1;
+    const panel = document.getElementById(t.getAttribute('aria-controls')!)!;
+    if (panel.classList.contains('guide-panel')) panel.hidden = !on;
+  }
+}
+
+// ---- Right side: the Moon (3D view and attitude ball) or the computer (registers and listing)
+
+type Deck = 'moon' | 'computer';
+let deck: Deck = 'moon';
+try {
+  if (localStorage.getItem('agc-deck') === 'computer') deck = 'computer';
+} catch {
+  // storage unavailable
+}
+/** Show one side; the choice is kept for the next visit. */
+function setDeck(next: Deck): void {
+  deck = next;
+  els.right.dataset.deck = next;
+  showTab($<HTMLButtonElement>(`#tab-${next}`));
+  if (next === 'computer') refreshPanels(true);
+  try {
+    localStorage.setItem('agc-deck', next);
+  } catch {
+    // storage unavailable
+  }
+}
+tabList(els.deckTabs, (tab) => setDeck(tab.id === 'tab-moon' ? 'moon' : 'computer'));
+
 // ---- Commands
 
 function renderCommands(vehicle: 'LM' | 'CM'): void {
@@ -119,9 +179,9 @@ function renderCommands(vehicle: 'LM' | 'CM'): void {
         `<span class="keys">${explain(displayKeys(c.keys))}</span><span class="detail">${explain(c.detail)}</span></button></li>`,
     )
     .join('');
-  els.chips.innerHTML = shown
+  els.quickCmds.innerHTML = shown
     .filter(([c]) => c.chip)
-    .map(([c, i]) => `<button type="button" class="ctl chip" data-cmd="${i}" title="${escapeHtml(displayKeys(c.keys))}">${escapeHtml(c.chip!)}</button>`)
+    .map(([c, i]) => `<button type="button" class="ctl quick-cmd" data-cmd="${i}" title="${escapeHtml(displayKeys(c.keys))}">${escapeHtml(c.chip!)}</button>`)
     .join('');
 }
 /** The loaded program's alarm list, each code with what it means, what sets it, and what the computer does. */
@@ -148,7 +208,7 @@ function filterAlarms(): void {
 }
 els.alarmSearch.addEventListener('input', filterAlarms);
 
-for (const list of [els.commands, els.chips]) {
+for (const list of [els.commands, els.quickCmds]) {
   list.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
     if (!btn) return;
@@ -186,9 +246,10 @@ function runCommand(command: Command): void {
 /** A phone gets the guide as a sheet over the page; a wider window keeps the DSKY beside it. */
 const sheetMedia = window.matchMedia('(max-width: 900px)');
 const guideTabs = [...els.guide.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+tabList(els.guide.querySelector('[role="tablist"]')!, showTab);
 
 function openGuide(tab?: string): void {
-  if (tab) selectGuideTab(tab);
+  if (tab) showTab($<HTMLButtonElement>(`#${tab}`));
   if (!els.guide.open) {
     if (sheetMedia.matches) els.guide.showModal();
     else els.guide.show();
@@ -202,14 +263,6 @@ function closeGuide(refocus = true): void {
   els.guide.close();
   els.guideOpen.setAttribute('aria-expanded', 'false');
   if (refocus) els.guideOpen.focus();
-}
-function selectGuideTab(id: string): void {
-  for (const t of guideTabs) {
-    const on = t.id === id;
-    t.setAttribute('aria-selected', String(on));
-    t.tabIndex = on ? 0 : -1;
-    document.getElementById(t.getAttribute('aria-controls')!)!.hidden = !on;
-  }
 }
 els.guideOpen.addEventListener('click', () => (els.guide.open ? closeGuide() : openGuide()));
 els.guideClose.addEventListener('click', () => closeGuide());
@@ -227,22 +280,6 @@ els.guide.addEventListener('keydown', (e) => {
 // A tap on the dimmed page around the sheet closes it.
 els.guide.addEventListener('click', (e) => {
   if (e.target === els.guide && els.guide.matches(':modal')) closeGuide();
-});
-els.guide.querySelector('[role="tablist"]')!.addEventListener('click', (e) => {
-  const tab = (e.target as HTMLElement).closest<HTMLButtonElement>('[role="tab"]');
-  if (tab) selectGuideTab(tab.id);
-});
-// Arrow keys move along the tabs, as in any tab list.
-els.guide.querySelector('[role="tablist"]')!.addEventListener('keydown', (e) => {
-  const key = (e as KeyboardEvent).key;
-  const i = guideTabs.indexOf(document.activeElement as HTMLButtonElement);
-  if (i < 0) return;
-  const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: guideTabs.length - 1 }[key];
-  if (next === undefined) return;
-  e.preventDefault();
-  const tab = guideTabs[(next + guideTabs.length) % guideTabs.length];
-  selectGuideTab(tab.id);
-  tab.focus();
 });
 // Turning a phone or resizing the window past the breakpoint changes which kind of guide it is.
 sheetMedia.addEventListener('change', () => closeGuide(false));
@@ -273,6 +310,8 @@ function setRunning(running: boolean): void {
 els.runToggle.addEventListener('click', () => setRunning(!machine?.running));
 els.step.addEventListener('click', () => {
   if (!machine) return;
+  // One instruction at a time is for reading along in the listing.
+  if (deck !== 'computer') setDeck('computer');
   machine.stepInstruction();
   if (els.follow.value === 'off') els.follow.value = 'all';
   refreshPanels(true);
@@ -290,6 +329,7 @@ const DESCENT_SETUP = COMMANDS.find((c) => c.setup === 'descent')!;
 els.land.addEventListener('click', async () => {
   if (program?.info.id !== 'Luminary099') await loadProgram('Luminary099');
   if (program?.info.id !== 'Luminary099' || !machine) return;
+  setDeck('moon');
   setRunning(true);
   runCommand(DESCENT_SETUP);
 });
@@ -407,6 +447,8 @@ async function loadProgram(id: string): Promise<void> {
   craft.attach(null, null);
   view?.attach(null);
   dsky.setVehicle(info.vehicle);
+  // The CM has no 3D view: its right side is the computer only.
+  els.right.dataset.vehicle = info.vehicle;
   renderCommands(info.vehicle);
   let loaded = cache.get(id);
   if (!loaded) {
@@ -562,11 +604,14 @@ function refreshPanels(force = false): void {
     } else {
       els.location.textContent = context;
     }
+    els.run.location.replaceChildren(...[...els.location.childNodes].map((n) => n.cloneNode(true)));
   }
+  els.run.routine.textContent = els.routine.textContent;
 
   const cs = agc.mem[REG.TIME2] * 16384 + agc.mem[REG.TIME1];
   const s = Math.floor(cs / 100);
   els.time.textContent = `${String(Math.floor(s / 3600)).padStart(3, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  els.run.time.textContent = els.time.textContent;
   const z = agc.mem[REG.Z] & 0o7777;
   const fb = (agc.mem[REG.FB] >> 10) & 0o37;
   els.regs.z.textContent = z >= 0o2000 && z < 0o4000 ? `${oct(fb + ((fb & 0o30) === 0o30 && agc.outputChannel7 & 0o100 ? 0o10 : 0), 2)},${oct(z, 4)}` : oct(z, 4);
@@ -622,7 +667,8 @@ function frame(now: number): void {
     if (!machine.agc.allowInterrupt) inhintSeen = now;
     dsky.update(readDsky(machine.agc));
     craft.update(now);
-    view?.update(craft.litJets);
+    // The 3D view draws only while it can be seen: on a phone it always can, on a wider window on the Moon side.
+    if (sheetMedia.matches || deck === 'moon') view?.update(craft.litJets);
     refreshPanels();
   }
   requestAnimationFrame(frame);
@@ -641,5 +687,6 @@ try {
   // storage unavailable
 }
 if (!PROGRAMS.some((p) => p.id === initial)) initial = 'Luminary099';
+setDeck(deck);
 void loadProgram(initial);
 requestAnimationFrame(frame);

@@ -2,7 +2,9 @@
 // rates, the PGNS mode switch, the IMU switch, and a hand controller
 // (on-screen buttons or the keyboard).  In orbit it also shows the LM's true
 // altitude, speeds, thrust and propellant, and the powered-descent checklist.
-// The attitude ball (FDAI) it drives sits in its own panel, beside the 3D view.
+// The attitude ball (FDAI), the descent readouts and the checklist are drawn
+// into hosts of their own: the ball and the readouts over the 3D view, the
+// checklist next to the DSKY.
 
 import type { AGC } from '../agc/cpu.ts';
 import type { DskyKey } from '../agc/dsky.ts';
@@ -185,31 +187,14 @@ export class LmPanel {
   constructor(
     readonly host: HTMLElement,
     private readonly checklistHost: ChecklistHost,
-    /** Where the attitude ball goes: its own panel, beside the 3D view. */
-    private readonly fdaiHost: HTMLElement,
+    /** Where the attitude ball, the descent readouts and the checklist go. */
+    private readonly parts: { fdai: HTMLElement; descent: HTMLElement; checklist: HTMLElement },
   ) {
     host.innerHTML = `
       <div class="craft-head">
         <h2 id="craft-title">Lunar Module</h2>
         <span class="craft-status" id="craft-status" role="status">—</span>
       </div>
-      <section class="checklist" aria-labelledby="checklist-label" hidden>
-        <div class="checklist-head">
-          <span class="k" id="checklist-label">Powered descent</span>
-          <span class="mono" data-step="count"></span>
-        </div>
-        <p class="checklist-warning" data-step="warning" role="alert" hidden></p>
-        <div aria-live="polite">
-          <p class="checklist-title" data-step="title"></p>
-          <p class="checklist-detail" data-step="detail"></p>
-        </div>
-        <div class="checklist-act" data-step="act">
-          <span class="checklist-action" data-step="action"></span>
-          <button type="button" class="ctl checklist-do" data-do></button>
-        </div>
-        <p class="checklist-timer mono" data-step="timer"></p>
-        <p class="checklist-note" data-step="note" hidden></p>
-      </section>
       <div class="craft-body">
         ${jetDiagram()}
         <div class="craft-read">
@@ -237,43 +222,58 @@ export class LmPanel {
           </div>
         </div>
       </div>
-      <div class="readout descent" hidden>
-        <span class="k">Descent <small>true values; the DSKY shows the computer's</small></span>
-        <div class="trio five">
-          <span><b>Altitude m</b><i class="mono" data-d="0">—</i></span>
-          <span><b>${abbr('Vert')} m/s</b><i class="mono" data-d="1">—</i></span>
-          <span><b>${abbr('Horiz')} m/s</b><i class="mono" data-d="2">—</i></span>
-          <span><b>Thrust %</b><i class="mono" data-d="3">—</i></span>
-          <span><b>Fuel kg</b><i class="mono" data-d="4">—</i></span>
-        </div>
-      </div>
       <div class="stick" aria-label="Hand controller: hold a button to turn">
         ${STICK_BUTTONS.map((b) => `<button type="button" class="ctl" data-stick="${b.input}" title="${b.title}">${b.label}</button>`).join('')}
         <button type="button" class="ctl kick" data-kick title="Give the LM a random turn and watch the autopilot stop it">Disturb</button>
       </div>
       <p class="hint">Keys: <kbd>↑</kbd><kbd>↓</kbd> pitch, <kbd>←</kbd><kbd>→</kbd> roll, <kbd>A</kbd><kbd>D</kbd> yaw, <kbd>Shift</kbd> full stick.</p>`;
+    parts.checklist.innerHTML = `
+      <div class="checklist-head">
+        <span class="k" id="checklist-label">Powered descent</span>
+        <span class="mono" data-step="count"></span>
+      </div>
+      <p class="checklist-warning" data-step="warning" role="alert" hidden></p>
+      <div aria-live="polite">
+        <p class="checklist-title" data-step="title"></p>
+        <p class="checklist-detail" data-step="detail"></p>
+      </div>
+      <div class="checklist-act" data-step="act">
+        <span class="checklist-action" data-step="action"></span>
+        <button type="button" class="ctl checklist-do" data-do></button>
+      </div>
+      <p class="checklist-timer mono" data-step="timer"></p>
+      <p class="checklist-note" data-step="note" hidden></p>`;
+    parts.descent.innerHTML = `
+      <span class="k">Descent <small>true values; the DSKY shows the computer's</small></span>
+      <div class="trio five">
+        <span><b>Altitude m</b><i class="mono" data-d="0">—</i></span>
+        <span><b>${abbr('Vert')} m/s</b><i class="mono" data-d="1">—</i></span>
+        <span><b>${abbr('Horiz')} m/s</b><i class="mono" data-d="2">—</i></span>
+        <span><b>Thrust %</b><i class="mono" data-d="3">—</i></span>
+        <span><b>Fuel kg</b><i class="mono" data-d="4">—</i></span>
+      </div>`;
     this.els = {
       status: host.querySelector('#craft-status')!,
       gimbals: [...host.querySelectorAll<HTMLElement>('[data-g]')],
       rates: [...host.querySelectorAll<HTMLElement>('[data-r]')],
-      descent: host.querySelector('.descent')!,
-      descentValues: [...host.querySelectorAll<HTMLElement>('[data-d]')],
-      checklist: host.querySelector('.checklist')!,
+      descent: parts.descent,
+      descentValues: [...parts.descent.querySelectorAll<HTMLElement>('[data-d]')],
+      checklist: parts.checklist,
       step: Object.fromEntries(
-        [...host.querySelectorAll<HTMLElement>('[data-step]')].map((el) => [el.dataset.step, el]),
+        [...parts.checklist.querySelectorAll<HTMLElement>('[data-step]')].map((el) => [el.dataset.step, el]),
       ) as LmPanel['els']['step'],
-      do: host.querySelector('[data-do]')!,
+      do: parts.checklist.querySelector('[data-do]')!,
       modes: [...host.querySelectorAll<HTMLButtonElement>('[data-mode]')],
       imu: host.querySelector('#craft-imu')!,
     };
     for (const g of host.querySelectorAll<SVGGElement>('.jet')) this.jetEls[Number(g.dataset.jet)] = g;
-    fdaiHost.innerHTML = `
+    parts.fdai.innerHTML = `
       <h2 id="fdai-title">Attitude ball</h2>
       <canvas class="fdai-ball" role="img"
         aria-label="Attitude ball (FDAI), with the computer's attitude-error needles and the rate needles"
         title="The ball holds still in space while the LM turns around it: its centre shows where the front of the LM points. The needles across the ball come from the original software and point the way to turn to reach the attitude it wants. The pointers outside show how fast the LM turns."></canvas>
       <p class="fdai-key">${explain('Centre: where the LM points. Needles: the way to turn.')}</p>`;
-    this.fdai = new Fdai(fdaiHost.querySelector('.fdai-ball')!);
+    this.fdai = new Fdai(parts.fdai.querySelector('.fdai-ball')!);
 
     host.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
@@ -283,7 +283,9 @@ export class LmPanel {
         this.syncSwitches();
       }
       if (target.closest('[data-kick]')) this.kick();
-      if (target.closest('[data-do]')) this.doStep();
+    });
+    parts.checklist.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('[data-do]')) this.doStep();
     });
     this.els.imu.addEventListener('change', () => {
       if (this.lm) this.lm.controls.imuOperate = this.els.imu.checked;
@@ -318,7 +320,10 @@ export class LmPanel {
     this.addressOf = addressOf;
     this.restartChecklist();
     this.host.hidden = !lm;
-    this.fdaiHost.hidden = !lm;
+    this.parts.fdai.hidden = !lm;
+    // Without an LM nothing updates them, so they go now; with one, update() shows them when they apply.
+    this.parts.descent.hidden = true;
+    this.parts.checklist.hidden = true;
     this.held.clear();
     this.lastJetSeconds.fill(0);
     this.glowUntil.fill(0);
