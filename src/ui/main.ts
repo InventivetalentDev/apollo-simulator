@@ -36,6 +36,7 @@ const els = {
   follow: $<HTMLSelectElement>('#follow'),
   loading: $('#loading'),
   loadingText: $('#loading-text'),
+  retry: $<HTMLButtonElement>('#loading-retry'),
   status: $('#assembly-status'),
   routine: $('#cpu-routine'),
   location: $('#cpu-location'),
@@ -181,6 +182,8 @@ els.land.addEventListener('click', async () => {
   runCommand(DESCENT_SETUP);
 });
 
+els.retry.addEventListener('click', () => void loadProgram(els.retry.dataset.program!));
+
 for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-program]')) {
   btn.addEventListener('click', () => {
     const id = btn.dataset.program!;
@@ -296,6 +299,8 @@ async function loadProgram(id: string): Promise<void> {
   let loaded = cache.get(id);
   if (!loaded) {
     els.loading.hidden = false;
+    els.loading.classList.remove('failed');
+    els.retry.hidden = true;
     els.loadingText.textContent = `Loading the original ${info.id} source…`;
     try {
       const { files, expectedRopeHash, sourceCommit } = await fetchSources(info);
@@ -314,7 +319,12 @@ async function loadProgram(id: string): Promise<void> {
       loaded = { info, response, expectedRopeHash, link, ...buildLabelIndex(response), jobTracker: buildJobTracker(response) };
       cache.set(id, loaded);
     } catch (err) {
+      if (token !== loadToken) return;
+      // Stop the spinner and offer another try: nothing was cached, so a retry starts clean.
+      els.loading.classList.add('failed');
       els.loadingText.textContent = String(err instanceof Error ? err.message : err);
+      els.retry.dataset.program = id;
+      els.retry.hidden = false;
       return;
     }
   }

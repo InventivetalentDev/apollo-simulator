@@ -54,6 +54,11 @@ const INK_ON_DARK = '#c9cdd1';
 const NEEDLE = '#e8a33d';
 const CASE_INK = '#8d98a1';
 const FONT = "'IBM Plex Mono', ui-monospace, Menlo, monospace";
+/**
+ * Below this ball radius, CSS px, the numbers on the ball and the roll scale
+ * are left out: at the 8 px floor they would overlap each other.
+ */
+const NUMBERS_MIN_RADIUS = 40;
 
 export class Fdai {
   private readonly ctx: CanvasRenderingContext2D;
@@ -174,6 +179,7 @@ export class Fdai {
     ctx.globalAlpha = 1;
 
     // Numbers, printed on the ball: pitch along the yaw-0 line, yaw along pitch 0 and 180.
+    if (r < NUMBERS_MIN_RADIUS) return;
     ctx.font = `600 ${Math.max(8, r * 0.13)}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -231,7 +237,7 @@ export class Fdai {
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.stroke();
-      if (major && v % 90 !== 0) {
+      if (major && v % 90 !== 0 && r >= NUMBERS_MIN_RADIUS) {
         const [x, y] = at(v * DEG, r * 1.25);
         ctx.fillText(String(v), x, y);
       }

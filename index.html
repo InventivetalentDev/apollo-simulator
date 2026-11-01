@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="The Apollo Guidance Computer, running the original Apollo 11 flight software in your browser." />
     <title>Apollo 11 Guidance Computer</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%235b6064'/%3E%3Crect x='5' y='5' width='22' height='22' rx='3' fill='%230d110e'/%3E%3Crect x='8' y='9' width='16' height='3' rx='1' fill='%238dffb0'/%3E%3Crect x='8' y='15' width='16' height='2' rx='1' fill='%238dffb0' opacity='.7'/%3E%3Crect x='8' y='20' width='16' height='2' rx='1' fill='%238dffb0' opacity='.7'/%3E%3C/svg%3E"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -51,7 +55,7 @@
             <section class="panel craft" id="craft" aria-labelledby="craft-title" hidden></section>
             <section class="panel commands" aria-labelledby="commands-title">
               <h2 id="commands-title">Try it</h2>
-              <p class="hint">Click a command to key it into the DSKY, or type on your keyboard: digits, <kbd>V</kbd>erb, <kbd>N</kbd>oun, <kbd>Enter</kbd>, <kbd>C</kbd>lear, <kbd>P</kbd>ro, <kbd>K</kbd>ey&nbsp;rel, <kbd>R</kbd>eset.</p>
+              <p class="hint">Click a command to key it into the DSKY, or type on your keyboard: digits, <kbd>V</kbd>&nbsp;verb, <kbd>N</kbd>&nbsp;noun, <kbd>Enter</kbd>, <kbd>C</kbd>&nbsp;clear, <kbd>P</kbd>&nbsp;pro, <kbd>K</kbd>&nbsp;key&nbsp;rel, <kbd>R</kbd>&nbsp;reset.</p>
               <ul id="command-list"></ul>
             </section>
             <section class="panel about" aria-labelledby="about-title">
@@ -89,7 +93,10 @@
                 <span class="status-lamp" id="lamp-paused" title="The computer is paused. Run starts it again.">Paused</span>
                 <span class="status-lamp" id="lamp-speed" title="Simulation speed: lit when it is not real time.">Speed <b id="cpu-speed">1×</b></span>
               </div>
-              <div class="rupts" id="cpu-rupts" aria-label="Interrupts per second"></div>
+              <div class="rupts-wrap">
+                <span class="rupts-k"><span aria-hidden="true">Interrupts/s</span><span class="visually-hidden">Interrupts per second:</span></span>
+                <div class="rupts" id="cpu-rupts"></div>
+              </div>
             </div>
           </section>
 
@@ -123,7 +130,8 @@
               <div class="loading" id="loading">
                 <div class="loading-box">
                   <div class="spinner" aria-hidden="true"></div>
-                  <p id="loading-text">Loading the original source…</p>
+                  <p id="loading-text" role="status">Loading the original source…</p>
+                  <button type="button" id="loading-retry" class="ctl" hidden>Try again</button>
                 </div>
               </div>
             </div>

@@ -221,7 +221,7 @@ export class LmPanel {
             </div>
           </div>
           <div class="switches">
-            <div class="seg" role="radiogroup" aria-label="PGNS mode control">
+            <div class="segmented" role="radiogroup" aria-label="PGNS mode control">
               ${MODES.map((m) => `<button type="button" role="radio" data-mode="${m.mode}" aria-checked="false">${abbr(m.label)}</button>`).join('')}
             </div>
             <label class="toggle"><input type="checkbox" id="craft-imu" checked /> ${explain('IMU operate')}</label>
