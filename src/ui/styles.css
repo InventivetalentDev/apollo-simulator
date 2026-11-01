@@ -2,12 +2,13 @@
    Layout: DSKY and commands on the left; computer state above a live
    assembly listing on the right.  Stacks to one column on phones. */
 :root {
-  --bg: #121518;
-  --panel: #1a1f23;
-  --panel-raised: #222830;
-  --line: #2f373f;
-  --text: #d9dee2;
-  --muted: #8d98a1;
+  /* Greys from the DSKY case's grey, darkened; text in the lamps' warm white */
+  --bg: #141617;
+  --panel: #1b1e20;
+  --panel-raised: #25292b;
+  --line: #363b3e;
+  --text: #dedcd2;
+  --muted: #94948d;
   --accent: #e8a33d; /* caution amber: the executing line, focus, active controls */
   --el: #8dffb0; /* electroluminescent display green */
   --el-dim: #15261b;
@@ -18,7 +19,7 @@
      controls, the group's name set into the top line, and white nomenclature. */
   --scribe: rgb(241 239 226 / 0.24);
   --label: color-mix(in srgb, var(--lamp-white) 70%, var(--bg));
-  --well: #0c0e10;
+  --well: #0b0c0d;
   --font-display: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
   --font-body: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
@@ -1060,7 +1061,7 @@ abbr[title] {
   width: 5ch;
   flex: none;
   text-align: right;
-  color: #4d5862;
+  color: #7c7b74;
   padding-right: 1ch;
   text-decoration: none;
 }
@@ -1071,7 +1072,7 @@ abbr[title] {
 .row .addr {
   width: 8.5ch;
   flex: none;
-  color: #7f8b95;
+  color: #8f8e86;
 }
 .row .words {
   width: 12ch;
@@ -1091,29 +1092,37 @@ abbr[title] {
   background: rgb(232 163 61 / 0.18);
   border-left-color: var(--accent);
 }
+.row.current .ln {
+  color: var(--text);
+}
 .row.flash {
   background: rgb(141 255 176 / 0.12);
 }
 .row.corrected .ln {
   color: var(--accent);
 }
+/* Listing tones come from the page's own inks: lamp white for the computer's
+   instructions, brass for the interpreter's, cream for labels, grey for the rest.
+   Comments stay at 4.5:1 or more on the black window. */
 .src .cm {
-  color: #6f7c86;
+  color: #8f8e86;
 }
 .src .cm.note {
-  color: #56616a;
+  color: #7c7b74;
 }
 .src .lb {
   color: #e8d9a8;
 }
 .src .op {
-  color: #8ec9ff;
+  color: var(--lamp-white);
+  font-weight: 500;
 }
 .src .ip {
-  color: #c9a6ff;
+  color: #d4ae6a;
+  font-weight: 500;
 }
 .src .ps {
-  color: #7fd6c2;
+  color: var(--label);
 }
 .src .inc {
   color: var(--accent);
@@ -1136,7 +1145,7 @@ abbr[title] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0f1215;
+  background: var(--well);
 }
 .loading[hidden] {
   display: none;
@@ -1216,7 +1225,7 @@ abbr[title] {
   font: 500 11px var(--font-mono);
 }
 .jets .quad {
-  fill: #2a3139;
+  fill: #2e3235;
   stroke: var(--muted);
   stroke-width: 1;
 }

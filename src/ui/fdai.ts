@@ -52,7 +52,7 @@ const DARK: Vec3 = [46, 51, 58];
 const INK_ON_LIGHT = '#1d2126';
 const INK_ON_DARK = '#c9cdd1';
 const NEEDLE = '#e8a33d';
-const CASE_INK = '#8d98a1';
+const CASE_INK = '#94948d';
 const FONT = "'IBM Plex Mono', ui-monospace, Menlo, monospace";
 /**
  * Below this ball radius, CSS px, the numbers on the ball and the roll scale
