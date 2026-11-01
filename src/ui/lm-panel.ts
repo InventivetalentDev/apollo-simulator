@@ -516,9 +516,9 @@ export class LmPanel {
       }
       return;
     }
-    // A press in a text field or the listing is not for the stick; a release always is.
+    // A press in a text field, the listing, a tab list or the guide is not for the stick; a release always is.
     const target = e.target as HTMLElement;
-    if (down && (target.closest('input, select, textarea, .source') || e.metaKey || e.ctrlKey || e.altKey)) return;
+    if (down && (target.closest('input, select, textarea, .source, [role="tablist"], .guide') || e.metaKey || e.ctrlKey || e.altKey)) return;
     e.preventDefault();
     this.full = e.shiftKey;
     this.hold(input, down);

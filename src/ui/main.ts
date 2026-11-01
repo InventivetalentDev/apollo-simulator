@@ -59,6 +59,11 @@ const els = {
   speedShown: $('#cpu-speed'),
   rupts: $('#cpu-rupts'),
   commands: $('#command-list'),
+  chips: $('#chips'),
+  cmdNote: $('#cmd-note'),
+  guide: $<HTMLDialogElement>('#guide'),
+  guideOpen: $<HTMLButtonElement>('#guide-open'),
+  guideClose: $<HTMLButtonElement>('#guide-close'),
   alarms: $('#alarm-list'),
   alarmSearch: $<HTMLInputElement>('#alarm-search'),
   alarmCount: $('#alarm-count'),
@@ -106,17 +111,23 @@ function typeKeys(keys: DskyKey[]): void {
 // ---- Commands
 
 function renderCommands(vehicle: 'LM' | 'CM'): void {
-  els.commands.innerHTML = COMMANDS.map((c, i) =>
-    c.vehicle && c.vehicle !== vehicle
-      ? ''
-      : `<li><button type="button" class="cmd${c.keys.length > 24 ? ' long' : ''}" data-cmd="${i}"><span class="title">${explain(c.title)}</span>` +
+  const shown = COMMANDS.map((c, i) => [c, i] as const).filter(([c]) => !c.vehicle || c.vehicle === vehicle);
+  els.commands.innerHTML = shown
+    .map(
+      ([c, i]) =>
+        `<li><button type="button" class="cmd${c.keys.length > 24 ? ' long' : ''}" data-cmd="${i}"><span class="title">${explain(c.title)}</span>` +
         `<span class="keys">${explain(displayKeys(c.keys))}</span><span class="detail">${explain(c.detail)}</span></button></li>`,
-  ).join('');
+    )
+    .join('');
+  els.chips.innerHTML = shown
+    .filter(([c]) => c.chip)
+    .map(([c, i]) => `<button type="button" class="ctl chip" data-cmd="${i}" title="${escapeHtml(displayKeys(c.keys))}">${escapeHtml(c.chip!)}</button>`)
+    .join('');
 }
 /** The loaded program's alarm list, each code with what it means, what sets it, and what the computer does. */
 function renderAlarms(): void {
   const alarms = alarmList();
-  els.alarmCount.textContent = `${alarms.length} in ${programName()}`;
+  els.alarmCount.textContent = `${programName()} has ${alarms.length}; this list comes from its own listing.`;
   els.alarms.innerHTML = alarms
     .map((a) => {
       const words = [a.code, ...a.variants.map((v) => `${v.text} ${v.setBy}`), a.note].join(' ').toLowerCase();
@@ -137,12 +148,15 @@ function filterAlarms(): void {
 }
 els.alarmSearch.addEventListener('input', filterAlarms);
 
-els.commands.addEventListener('click', (e) => {
-  const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
-  if (!btn) return;
-  const command = COMMANDS[Number(btn.dataset.cmd)];
-  runCommand(command);
-});
+for (const list of [els.commands, els.chips]) {
+  list.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
+    if (!btn) return;
+    // The sheet on a phone covers the DSKY: put it away so the keys can be seen going in.
+    if (list === els.commands && els.guide.matches(':modal')) closeGuide(false);
+    runCommand(COMMANDS[Number(btn.dataset.cmd)]);
+  });
+}
 
 /** Key in a ready-made command; a setup command first puts the simulation in its state. */
 function runCommand(command: Command): void {
@@ -156,6 +170,9 @@ function runCommand(command: Command): void {
     craft.attach(machine.lm, machine.agc, (name) => symbols.find((s) => s.name === name)?.value ?? -1);
   }
   typeKeys(parseKeys(command.keys));
+  // What the command does stays under the chips until the next one; a setup's checklist explains itself.
+  els.cmdNote.hidden = !!command.setup;
+  if (!command.setup) els.cmdNote.innerHTML = `<b>${explain(command.title)}.</b> ${explain(command.detail)}`;
   const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
   // When the list has scrolled the DSKY out of sight (narrow or short screens), bring it back.
   const shown = dsky.el.getBoundingClientRect();
@@ -164,13 +181,79 @@ function runCommand(command: Command): void {
   if (command.setup) els.leftScroll.scrollTo({ top: 0, behavior });
 }
 
+// ---- Guide: every command, the alarm codes and the introduction
+
+/** A phone gets the guide as a sheet over the page; a wider window keeps the DSKY beside it. */
+const sheetMedia = window.matchMedia('(max-width: 900px)');
+const guideTabs = [...els.guide.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+
+function openGuide(tab?: string): void {
+  if (tab) selectGuideTab(tab);
+  if (!els.guide.open) {
+    if (sheetMedia.matches) els.guide.showModal();
+    else els.guide.show();
+  }
+  els.guideOpen.setAttribute('aria-expanded', 'true');
+  guideTabs.find((t) => t.getAttribute('aria-selected') === 'true')?.focus();
+}
+/** Close the guide; `refocus` puts focus back on the button that opened it. */
+function closeGuide(refocus = true): void {
+  if (!els.guide.open) return;
+  els.guide.close();
+  els.guideOpen.setAttribute('aria-expanded', 'false');
+  if (refocus) els.guideOpen.focus();
+}
+function selectGuideTab(id: string): void {
+  for (const t of guideTabs) {
+    const on = t.id === id;
+    t.setAttribute('aria-selected', String(on));
+    t.tabIndex = on ? 0 : -1;
+    document.getElementById(t.getAttribute('aria-controls')!)!.hidden = !on;
+  }
+}
+els.guideOpen.addEventListener('click', () => (els.guide.open ? closeGuide() : openGuide()));
+els.guideClose.addEventListener('click', () => closeGuide());
+// Esc closes the sheet by itself (cancel); the panel beside the DSKY is not modal, so it is handled here.
+els.guide.addEventListener('cancel', (e) => {
+  e.preventDefault();
+  closeGuide();
+});
+els.guide.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeGuide();
+  }
+});
+// A tap on the dimmed page around the sheet closes it.
+els.guide.addEventListener('click', (e) => {
+  if (e.target === els.guide && els.guide.matches(':modal')) closeGuide();
+});
+els.guide.querySelector('[role="tablist"]')!.addEventListener('click', (e) => {
+  const tab = (e.target as HTMLElement).closest<HTMLButtonElement>('[role="tab"]');
+  if (tab) selectGuideTab(tab.id);
+});
+// Arrow keys move along the tabs, as in any tab list.
+els.guide.querySelector('[role="tablist"]')!.addEventListener('keydown', (e) => {
+  const key = (e as KeyboardEvent).key;
+  const i = guideTabs.indexOf(document.activeElement as HTMLButtonElement);
+  if (i < 0) return;
+  const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: guideTabs.length - 1 }[key];
+  if (next === undefined) return;
+  e.preventDefault();
+  const tab = guideTabs[(next + guideTabs.length) % guideTabs.length];
+  selectGuideTab(tab.id);
+  tab.focus();
+});
+// Turning a phone or resizing the window past the breakpoint changes which kind of guide it is.
+sheetMedia.addEventListener('change', () => closeGuide(false));
+
 // ---- Keyboard
 
 document.addEventListener('keydown', (e) => {
   const target = e.target as HTMLElement;
   if (target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
-  // Enter and Space work the focused control: a button, a link, or the alarm list's summary.
-  if (target.closest('button, summary, a[href]') && (e.key === 'Enter' || e.key === ' ')) return;
+  // Enter and Space work the focused control: a button or a link.
+  if (target.closest('button, a[href]') && (e.key === 'Enter' || e.key === ' ')) return;
   const key = KEYBOARD_MAP[e.key] ?? KEYBOARD_MAP[e.key.toLowerCase()];
   if (!key) return;
   e.preventDefault();
@@ -547,8 +630,9 @@ function frame(now: number): void {
 
 // Short forms in the page's fixed text: their meaning shows on hover.
 for (const el of document.querySelectorAll<HTMLElement>('[data-abbr]')) el.innerHTML = abbr(el.textContent!.trim());
-explainIn($('.about'));
-explainIn($('.commands .hint'));
+explainIn($('#gpanel-about'));
+explainIn($('#gpanel-try .hint'));
+$('#intro').append($('#gpanel-about ul').cloneNode(true));
 
 let initial = 'Luminary099';
 try {

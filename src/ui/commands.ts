@@ -10,6 +10,8 @@ export interface Command {
   vehicle?: 'LM' | 'CM';
   /** Before typing the keys, put the simulation in this state. */
   setup?: 'descent';
+  /** Also offered as a one-click chip under the DSKY, with this short name. */
+  chip?: string;
 }
 
 export const COMMANDS: Command[] = [
@@ -51,12 +53,14 @@ export const COMMANDS: Command[] = [
   {
     title: 'Lamp test',
     keys: 'V 3 5 E',
+    chip: 'Lamp test',
     detail: 'Verb 35 lights every lamp and display segment for about five seconds.',
   },
   {
     title: 'Show the alarm codes',
     keys: 'V 0 5 N 0 9 E',
-    detail: 'At power-up the PROG lamp is lit with alarm 01107: erasable memory was blank, so the software did a fresh start. Hover over a code on the DSKY for its meaning, or look it up under Alarm codes below.',
+    chip: 'Show alarms',
+    detail: 'At power-up the PROG lamp is lit with alarm 01107: erasable memory was blank, so the software did a fresh start. Hover over a code on the DSKY for its meaning, or look it up under Alarm codes in the Guide.',
   },
   {
     title: 'Clear the alarm lamps',
@@ -66,6 +70,7 @@ export const COMMANDS: Command[] = [
   {
     title: 'Watch the clock',
     keys: 'V 1 6 N 6 5 E',
+    chip: 'Watch the clock',
     detail: 'Verb 16 monitors noun 65, the time since power-up: hours, minutes and hundredths of a second.',
   },
   {
