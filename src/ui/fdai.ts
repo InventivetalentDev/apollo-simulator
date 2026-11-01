@@ -352,7 +352,8 @@ export class Fdai {
     ctx.fillText('ROLL', c - half - 6, c - gap);
     ctx.fillText('YAW', c - half - 6, c + gap);
     ctx.textAlign = 'center';
-    ctx.fillText('PITCH', c + gap, c - half - 10);
+    // Over the pitch scale, but kept inside the square: on a small ball the lettering's 8 px minimum would run off the edge.
+    ctx.fillText('PITCH', Math.min(c + gap, 2 * c - ctx.measureText('PITCH').width / 2 - 1), c - half - 10);
     ctx.fillStyle = NEEDLE;
     pointer(c + rate[2], c - gap, 'down');
     pointer(c + gap, c - rate[1], 'left');

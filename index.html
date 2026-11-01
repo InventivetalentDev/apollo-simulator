@@ -21,7 +21,7 @@
       <header class="topbar">
         <div class="brand">
           <h1>Apollo Guidance Computer</h1>
-          <p>Apollo 11 flight software, assembled from the 1969 source and running in your browser</p>
+          <p><span class="long">Apollo 11 flight software, assembled from the 1969 source and running in your browser</span><span class="short">Apollo 11's own flight software, running in your browser</span></p>
         </div>
         <div class="program-switch" role="radiogroup" aria-label="Spacecraft">
           <button type="button" role="radio" data-program="Luminary099" aria-checked="true">
@@ -156,6 +156,8 @@
               <footer class="source-foot" id="assembly-status">—</footer>
             </section>
           </div>
+          <!-- On a phone the registers and the listing wait at the bottom until asked for. -->
+          <button type="button" class="ctl insides" id="insides" aria-controls="deck-computer" aria-expanded="false">Show the computer’s insides</button>
         </section>
 
         <!-- Opens beside the DSKY, so its keys stay in reach while commands are picked; a sheet from the bottom on phones. -->

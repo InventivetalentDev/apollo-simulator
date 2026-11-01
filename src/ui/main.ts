@@ -70,6 +70,7 @@ const els = {
   alarmEmpty: $('#alarm-empty'),
   leftScroll: $('.left-scroll'),
   right: $('.right'),
+  insides: $<HTMLButtonElement>('#insides'),
   deckTabs: $('.deck-tabs'),
   run: {
     routine: $('#run-routine'),
@@ -77,6 +78,12 @@ const els = {
     time: $('#run-time'),
   },
 };
+
+/**
+ * A phone-sized window: one column with the 3D view on top, the guide as a sheet over the
+ * page, and the 3D view always in sight.  Matches the stylesheet's breakpoint.
+ */
+const oneColumn = window.matchMedia('(max-width: 900px)');
 
 let machine: Machine | null = null;
 let program: LoadedProgram | null = null;
@@ -168,6 +175,15 @@ function setDeck(next: Deck): void {
 }
 tabList(els.deckTabs, (tab) => setDeck(tab.id === 'tab-moon' ? 'moon' : 'computer'));
 
+// On a phone the registers and the listing wait at the bottom of the page until asked for.
+els.insides.addEventListener('click', () => {
+  const open = els.right.dataset.insides !== 'open';
+  els.right.dataset.insides = open ? 'open' : '';
+  els.insides.setAttribute('aria-expanded', String(open));
+  els.insides.textContent = open ? 'Hide the computer’s insides' : 'Show the computer’s insides';
+  if (open) refreshPanels(true);
+});
+
 // ---- Commands
 
 function renderCommands(vehicle: 'LM' | 'CM'): void {
@@ -234,24 +250,27 @@ function runCommand(command: Command): void {
   els.cmdNote.hidden = !!command.setup;
   if (!command.setup) els.cmdNote.innerHTML = `<b>${explain(command.title)}.</b> ${explain(command.detail)}`;
   const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-  // When the list has scrolled the DSKY out of sight (narrow or short screens), bring it back.
+  if (command.setup && oneColumn.matches) {
+    // On a phone the 3D view and the checklist under it are the top of the page: the landing starts there.
+    document.querySelector('.stage')!.scrollIntoView({ behavior, block: 'start' });
+    return;
+  }
+  // When the page has scrolled the DSKY out of sight (narrow or short screens), bring it back.
   const shown = dsky.el.getBoundingClientRect();
   if (shown.top < 0 || shown.bottom > window.innerHeight) dsky.el.scrollIntoView({ behavior, block: 'start' });
-  // After a setup, show the LM panel's checklist at the top of the panels under the DSKY.
+  // After a setup, show the checklist at the top of the panels under the DSKY.
   if (command.setup) els.leftScroll.scrollTo({ top: 0, behavior });
 }
 
 // ---- Guide: every command, the alarm codes and the introduction
 
-/** A phone gets the guide as a sheet over the page; a wider window keeps the DSKY beside it. */
-const sheetMedia = window.matchMedia('(max-width: 900px)');
 const guideTabs = [...els.guide.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
 tabList(els.guide.querySelector('[role="tablist"]')!, showTab);
 
 function openGuide(tab?: string): void {
   if (tab) showTab($<HTMLButtonElement>(`#${tab}`));
   if (!els.guide.open) {
-    if (sheetMedia.matches) els.guide.showModal();
+    if (oneColumn.matches) els.guide.showModal();
     else els.guide.show();
   }
   els.guideOpen.setAttribute('aria-expanded', 'true');
@@ -282,7 +301,7 @@ els.guide.addEventListener('click', (e) => {
   if (e.target === els.guide && els.guide.matches(':modal')) closeGuide();
 });
 // Turning a phone or resizing the window past the breakpoint changes which kind of guide it is.
-sheetMedia.addEventListener('change', () => closeGuide(false));
+oneColumn.addEventListener('change', () => closeGuide(false));
 
 // ---- Keyboard
 
@@ -668,7 +687,7 @@ function frame(now: number): void {
     dsky.update(readDsky(machine.agc));
     craft.update(now);
     // The 3D view draws only while it can be seen: on a phone it always can, on a wider window on the Moon side.
-    if (sheetMedia.matches || deck === 'moon') view?.update(craft.litJets);
+    if (oneColumn.matches || deck === 'moon') view?.update(craft.litJets);
     refreshPanels();
   }
   requestAnimationFrame(frame);
