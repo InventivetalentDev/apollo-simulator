@@ -120,7 +120,9 @@ ignition to touchdown at Tranquility Base.
      LM turns, and the DSKY shows V06 N18 without flashing.
    - **V50 N18** flashing again (the turn is done): press ENTR to accept the
      attitude. The DSKY then stays blank for about 5 minutes.
-   - **V99** flashing, 35 s before ignition (enable the engine?): press PRO.
+   - **V99** flashing, 5 s before ignition (enable the engine?): press PRO.
+     A late answer lights the engine late; 30 s after the ignition time P63
+     gives up with alarm 1406.
 4. Watch the burn. The jets fire for ullage, the engine lights at minimum
    thrust, and 26 s later it goes to full throttle. About 6 minutes in, the
    computer turns the LM windows up, the landing radar sees the ground, and
@@ -134,7 +136,10 @@ ignition to touchdown at Tranquility Base.
 
 While the crew waits, for the turn, for ignition, or during the burn, the
 checklist's **Fast-forward** button runs the simulation at 20× until the
-next step, then returns to the speed you had.
+next step, then returns to the speed you had. The other way round, when the
+checklist asks you to press a key, the simulation runs in real time until
+you do, then returns to the speed you had: at 100× a question would be gone
+before you could read it.
 
 During the descent the panel shows the LM's true altitude, its speeds
 against the ground, thrust and propellant. The DSKY shows what the computer

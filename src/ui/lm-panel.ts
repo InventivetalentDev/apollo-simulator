@@ -29,6 +29,9 @@ const STEP_MIN_MS = 1200;
 /** Simulation speed while the checklist fast-forwards through a wait. */
 const FAST_FORWARD = 20;
 
+/** The step asks the crew for something, and they have not done it yet. */
+const waitsForCrew = (s: DescentStep) => !s.answered && !!(s.key || s.keys || s.stopEngine);
+
 /** What the checklist's buttons need from the page. */
 export interface ChecklistHost {
   /** Type DSKY keys at human speed (space separated; V, N, E stand for VERB, NOUN, ENTR). */
@@ -154,6 +157,8 @@ export class LmPanel {
   private cued: DskyKey | null = null;
   /** The speed to go back to after fast-forward, or 0 when not fast-forwarding. */
   private resumeSpeed = 0;
+  /** The speed to go back to once the crew has answered, or 0 when the checklist did not slow down. */
+  private answerSpeed = 0;
   private readonly held = new Set<StickInput>();
   private full = false;
   private readonly jetEls: SVGGElement[] = [];
@@ -169,7 +174,7 @@ export class LmPanel {
     descent: HTMLElement;
     descentValues: HTMLElement[];
     checklist: HTMLElement;
-    step: Record<'count' | 'title' | 'detail' | 'act' | 'action' | 'timer', HTMLElement>;
+    step: Record<'count' | 'title' | 'detail' | 'act' | 'action' | 'timer' | 'note', HTMLElement>;
     do: HTMLButtonElement;
     modes: HTMLButtonElement[];
     imu: HTMLInputElement;
@@ -200,6 +205,7 @@ export class LmPanel {
           <button type="button" class="ctl checklist-do" data-do></button>
         </div>
         <p class="checklist-timer mono" data-step="timer"></p>
+        <p class="checklist-note" data-step="note" hidden></p>
       </section>
       <div class="craft-body">
         ${jetDiagram()}
@@ -347,6 +353,7 @@ export class LmPanel {
     this.checklist = new DescentChecklist(this.addressOf, loaded);
     this.step = this.current = null;
     this.fastForward(false);
+    this.realTime(false);
     this.cue(null);
   }
 
@@ -372,6 +379,23 @@ export class LmPanel {
     }
   }
 
+  /**
+   * Slow to real time while a step waits for the crew, and go back to the chosen speed after.
+   * At 100× a question would be gone before anyone could read it, and P63 needs the answer
+   * to V99 within seconds of the ignition time.
+   */
+  private realTime(on: boolean): void {
+    const host = this.checklistHost;
+    if (on && !this.answerSpeed && host.speed() > 1) {
+      this.answerSpeed = host.speed();
+      host.setSpeed(1);
+    } else if (!on && this.answerSpeed) {
+      // Leave the speed alone if it was changed by hand meanwhile.
+      if (host.speed() === 1) host.setSpeed(this.answerSpeed);
+      this.answerSpeed = 0;
+    }
+  }
+
   private cue(key: DskyKey | null): void {
     if (key === this.cued) return;
     this.cued = key;
@@ -383,17 +407,19 @@ export class LmPanel {
     // A new step ends fast-forward, so every question and event comes at the chosen speed.
     if (next?.number !== this.current?.number || next?.key !== this.current?.key) this.fastForward(false);
     this.current = next;
-    // Keep a step that asked nothing on screen a little longer if the next one also asks nothing.
+    // Keep a step that asked nothing on screen long enough to read, even when the next one follows within moments.
     let step = next;
     if (next?.title !== this.step?.title) {
       const passive = (s: DescentStep) => !s.key && !s.keys && !s.stopEngine;
-      if (next && this.step && passive(next) && passive(this.step) && now - this.stepShownAt < STEP_MIN_MS) step = this.step;
+      if (next && this.step && passive(this.step) && now - this.stepShownAt < STEP_MIN_MS) step = this.step;
       else {
         this.stepShownAt = now;
         this.fastForward(false);
       }
     }
     this.step = step;
+    // Slow down as soon as the computer asks, even while the step before is still on screen.
+    this.realTime(!!next && waitsForCrew(next));
     this.cue(step?.key ?? null);
     this.els.checklist.hidden = !step;
     if (!step) return;
@@ -409,6 +435,9 @@ export class LmPanel {
     set(s.detail, explain(step.detail));
     set(s.timer, step.timer ?? '');
     s.timer.hidden = !step.timer;
+    const slowed = this.answerSpeed > 0 && waitsForCrew(step);
+    set(s.note, slowed ? `Running at 1× until you answer, then back to ${this.answerSpeed}×.` : '');
+    s.note.hidden = !slowed;
     const canSpeedUp = step.wait && (this.resumeSpeed > 0 || this.checklistHost.speed() < FAST_FORWARD);
     const kbd = (keys: string) => displayKeys(keys).split(' ').map((k) => `<kbd>${abbr(k)}</kbd>`).join(' ');
     set(

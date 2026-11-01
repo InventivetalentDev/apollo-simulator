@@ -1230,6 +1230,11 @@ abbr[title] {
   color: var(--el);
   font-size: 13px;
 }
+.checklist .checklist-note {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
 .switches {
   display: flex;
   flex-wrap: wrap;

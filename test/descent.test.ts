@@ -176,11 +176,11 @@ test('Luminary099 flies the powered descent from the setup to the surface, with 
     const step = checklist.current(agc, lm)!;
     if (step.number !== steps.at(-1)) {
       steps.push(step.number);
-      // Leave V99 waiting a few seconds, through P63's once-a-second rewrites of the
-      // display: the step must not waver, even at every 10 ms.
+      // Leave V99 waiting 1.5 s of its 5, through a once-a-second rewrite of the
+      // display by P63: the step must not waver, even at every 10 ms.
       if (step.key === 'PRO' && step.title.startsWith('V99')) {
         const seen = new Set<string>();
-        for (let i = 0; i < 400; i++) {
+        for (let i = 0; i < 150; i++) {
           run(0.01);
           seen.add(checklist.current(agc, lm)!.title);
         }
@@ -188,6 +188,14 @@ test('Luminary099 flies the powered descent from the setup to the surface, with 
       }
       if (step.key) keys(step.key);
       else if (step.keys && step.number > 1) keys(step.keys);
+      // Once PRO is in, the step moves on, though the DSKY still shows V06 N62 until ignition.
+      if (step.key === 'PRO' && step.title.startsWith('V99')) {
+        for (let i = 0; i < 10; i++) {
+          run(0.1);
+          assert.equal(lm.engine.thrust, 0, 'before ignition');
+          assert.notEqual(checklist.current(agc, lm)!.title, step.title, 'the V99 step ends once PRO is pressed');
+        }
+      }
       else if (step.stopEngine) lm.engine.armed = false;
     }
     const altitude = Math.hypot(...lm.position) - lm.surfaceRadius;
@@ -232,4 +240,29 @@ test('Luminary099 flies the powered descent from the setup to the surface, with 
   assert.ok(fromSite < 500, `${fromSite.toFixed(0)} m from the planned landing site`);
   assert.equal(agc.restarts, 0, 'no restarts');
   assert.deepEqual([0, 1, 2].map((k) => agc.mem[address('FAILREG') + k]), [0, 0, 0], 'no alarms');
+});
+
+test('with no answer to V99 the engine never lights, P63 gives up, and the checklist says so', () => {
+  const { agc, lm, run, keys, address } = bootLm();
+  const state = descentState();
+  prepareLunarModule(lm, state);
+  run(16);
+  loadDescent(agc, lm, address, state);
+  keys('RSET V 4 8 E V 2 1 E 2 1 1 0 2 E PRO V 2 1 E + 3 3 2 9 0 E PRO PRO');
+  run(2);
+  keys('V 3 7 E 6 3 E');
+  const checklist = new DescentChecklist(address);
+  let answeredSeen = false;
+  let step = checklist.current(agc, lm)!;
+  for (let t = 0; t < 600 && step.title !== 'No answer to V99'; t += 0.1) {
+    run(0.1);
+    step = checklist.current(agc, lm)!;
+    // Once the crew has answered, the step stays on screen until the next display, marked answered.
+    if (step.answered && step.key) answeredSeen = true;
+    if (step.key && !step.answered && !step.title.startsWith('V99')) keys(step.key);
+  }
+  assert.ok(answeredSeen, 'an answered question is marked answered');
+  assert.equal(step.title, 'No answer to V99');
+  assert.equal(lm.engine.thrust, 0, 'the engine never lit');
+  assert.equal(agc.mem[address('FAILREG')], 0o1406, 'alarm 1406');
 });
