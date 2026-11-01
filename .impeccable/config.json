@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-11-01T12:55:38.572Z",
+        "reason": "user confirmed 2026-11-01: keep the small uppercase panel labels"
+      }
+    ]
+  }
+}
