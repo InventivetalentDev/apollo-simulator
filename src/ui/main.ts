@@ -38,6 +38,7 @@ const els = {
   loadingText: $('#loading-text'),
   retry: $<HTMLButtonElement>('#loading-retry'),
   status: $('#assembly-status'),
+  followStatus: $('#follow-status'),
   routine: $('#cpu-routine'),
   location: $('#cpu-location'),
   time: $('#cpu-time'),
@@ -59,12 +60,31 @@ const els = {
   speedShown: $('#cpu-speed'),
   rupts: $('#cpu-rupts'),
   commands: $('#command-list'),
+  quickCmds: $('#quick-cmds'),
+  cmdNote: $('#cmd-note'),
+  guide: $<HTMLDialogElement>('#guide'),
+  guideOpen: $<HTMLButtonElement>('#guide-open'),
+  guideClose: $<HTMLButtonElement>('#guide-close'),
   alarms: $('#alarm-list'),
   alarmSearch: $<HTMLInputElement>('#alarm-search'),
   alarmCount: $('#alarm-count'),
   alarmEmpty: $('#alarm-empty'),
   leftScroll: $('.left-scroll'),
+  right: $('.right'),
+  insides: $<HTMLButtonElement>('#insides'),
+  deckTabs: $('.deck-tabs'),
+  run: {
+    routine: $('#run-routine'),
+    location: $('#run-location'),
+    time: $('#run-time'),
+  },
 };
+
+/**
+ * A phone-sized window: one column with the 3D view on top, the guide as a sheet over the
+ * page, and the 3D view always in sight.  Matches the stylesheet's breakpoint.
+ */
+const oneColumn = window.matchMedia('(max-width: 900px)');
 
 let machine: Machine | null = null;
 let program: LoadedProgram | null = null;
@@ -87,7 +107,7 @@ const craft = new LmPanel($('#craft'), {
     els.speed.value = String(speed);
     if (machine) machine.speed = speed;
   },
-}, $('#fdai'));
+}, { fdai: $('#fdai'), descent: $('#descent'), checklist: $('#checklist') });
 let view: LmView | null = null;
 
 const source = new SourceView($('.source'), {
@@ -103,20 +123,88 @@ function typeKeys(keys: DskyKey[]): void {
   if (els.follow.value === 'off') els.follow.value = 'jobs';
 }
 
+// ---- Tab lists: a click or the arrow keys select a tab
+
+function tabList(list: HTMLElement, select: (tab: HTMLButtonElement) => void): void {
+  const tabs = () => [...list.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  list.addEventListener('click', (e) => {
+    const tab = (e.target as HTMLElement).closest<HTMLButtonElement>('[role="tab"]');
+    if (tab) select(tab);
+  });
+  list.addEventListener('keydown', (e) => {
+    const all = tabs();
+    const i = all.indexOf(document.activeElement as HTMLButtonElement);
+    const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: all.length - 1 }[e.key];
+    if (i < 0 || next === undefined) return;
+    e.preventDefault();
+    const tab = all[(next + all.length) % all.length];
+    select(tab);
+    tab.focus();
+  });
+}
+/** Mark `tab` selected in its list and show its panel, hiding the others'. */
+function showTab(tab: HTMLButtonElement): void {
+  for (const t of tab.parentElement!.querySelectorAll<HTMLButtonElement>('[role="tab"]')) {
+    const on = t === tab;
+    t.setAttribute('aria-selected', String(on));
+    t.tabIndex = on ? 0 : -1;
+    const panel = document.getElementById(t.getAttribute('aria-controls')!)!;
+    if (panel.classList.contains('guide-panel')) panel.hidden = !on;
+  }
+}
+
+// ---- Right side: the Moon (3D view and attitude ball) or the computer (registers and listing)
+
+type Deck = 'moon' | 'computer';
+let deck: Deck = 'moon';
+try {
+  if (localStorage.getItem('agc-deck') === 'computer') deck = 'computer';
+} catch {
+  // storage unavailable
+}
+/** Show one side; the choice is kept for the next visit. */
+function setDeck(next: Deck): void {
+  deck = next;
+  els.right.dataset.deck = next;
+  showTab($<HTMLButtonElement>(`#tab-${next}`));
+  if (next === 'computer') refreshPanels(true);
+  try {
+    localStorage.setItem('agc-deck', next);
+  } catch {
+    // storage unavailable
+  }
+}
+tabList(els.deckTabs, (tab) => setDeck(tab.id === 'tab-moon' ? 'moon' : 'computer'));
+
+// On a phone the registers and the listing wait at the bottom of the page until asked for.
+els.insides.addEventListener('click', () => {
+  const open = els.right.dataset.insides !== 'open';
+  els.right.dataset.insides = open ? 'open' : '';
+  els.insides.setAttribute('aria-expanded', String(open));
+  els.insides.textContent = open ? 'Hide the computer’s insides' : 'Show the computer’s insides';
+  if (open) refreshPanels(true);
+});
+
 // ---- Commands
 
 function renderCommands(vehicle: 'LM' | 'CM'): void {
-  els.commands.innerHTML = COMMANDS.map((c, i) =>
-    c.vehicle && c.vehicle !== vehicle
-      ? ''
-      : `<li><button type="button" class="cmd${c.keys.length > 24 ? ' long' : ''}" data-cmd="${i}"><span class="title">${explain(c.title)}</span>` +
+  const shown = COMMANDS.map((c, i) => [c, i] as const).filter(([c]) => !c.vehicle || c.vehicle === vehicle);
+  els.commands.innerHTML = shown
+    .map(
+      ([c, i]) =>
+        `<li><button type="button" class="cmd${c.keys.length > 24 ? ' long' : ''}" data-cmd="${i}"><span class="title">${explain(c.title)}</span>` +
         `<span class="keys">${explain(displayKeys(c.keys))}</span><span class="detail">${explain(c.detail)}</span></button></li>`,
-  ).join('');
+    )
+    .join('');
+  els.quickCmds.innerHTML = shown
+    .filter(([c]) => c.chip)
+    .map(([c, i]) => `<button type="button" class="ctl quick-cmd" data-cmd="${i}" title="${escapeHtml(displayKeys(c.keys))}">${escapeHtml(c.chip!)}</button>`)
+    .join('');
 }
 /** The loaded program's alarm list, each code with what it means, what sets it, and what the computer does. */
 function renderAlarms(): void {
   const alarms = alarmList();
-  els.alarmCount.textContent = `${alarms.length} in ${programName()}`;
+  els.alarmCount.textContent = `${programName()} has ${alarms.length} alarm codes; this list comes from its own listing.`;
   els.alarms.innerHTML = alarms
     .map((a) => {
       const words = [a.code, ...a.variants.map((v) => `${v.text} ${v.setBy}`), a.note].join(' ').toLowerCase();
@@ -137,12 +225,15 @@ function filterAlarms(): void {
 }
 els.alarmSearch.addEventListener('input', filterAlarms);
 
-els.commands.addEventListener('click', (e) => {
-  const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
-  if (!btn) return;
-  const command = COMMANDS[Number(btn.dataset.cmd)];
-  runCommand(command);
-});
+for (const list of [els.commands, els.quickCmds]) {
+  list.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
+    if (!btn) return;
+    // The sheet on a phone covers the DSKY: put it away so the keys can be seen going in.
+    if (list === els.commands && els.guide.matches(':modal')) closeGuide(false);
+    runCommand(COMMANDS[Number(btn.dataset.cmd)]);
+  });
+}
 
 /** Key in a ready-made command; a setup command first puts the simulation in its state. */
 function runCommand(command: Command): void {
@@ -155,22 +246,113 @@ function runCommand(command: Command): void {
     });
     craft.attach(machine.lm, machine.agc, (name) => symbols.find((s) => s.name === name)?.value ?? -1);
   }
+  watchPowerUpLamps = false;
+  hideLampNote();
   typeKeys(parseKeys(command.keys));
+  // What the command does stays under the chips until the next one; a setup's checklist explains itself.
+  els.cmdNote.hidden = !!command.setup;
+  if (!command.setup) els.cmdNote.innerHTML = `<b>${explain(command.title)}.</b> ${explain(command.detail)}`;
   const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
-  // When the list has scrolled the DSKY out of sight (narrow or short screens), bring it back.
+  if (command.setup && oneColumn.matches) {
+    // On a phone the 3D view and the checklist under it are the top of the page: the landing starts there.
+    document.querySelector('.stage')!.scrollIntoView({ behavior, block: 'start' });
+    return;
+  }
+  // When the page has scrolled the DSKY out of sight (narrow or short screens), bring it back.
   const shown = dsky.el.getBoundingClientRect();
   if (shown.top < 0 || shown.bottom > window.innerHeight) dsky.el.scrollIntoView({ behavior, block: 'start' });
-  // After a setup, show the LM panel's checklist at the top of the panels under the DSKY.
+  // After a setup, show the checklist at the top of the panels under the DSKY.
   if (command.setup) els.leftScroll.scrollTo({ top: 0, behavior });
 }
+
+// ---- Guide: every command, the alarm codes and the introduction
+
+const guideTabs = [...els.guide.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+tabList(els.guide.querySelector('[role="tablist"]')!, showTab);
+
+function openGuide(tab?: string): void {
+  if (tab) showTab($<HTMLButtonElement>(`#${tab}`));
+  if (!els.guide.open) {
+    if (oneColumn.matches) els.guide.showModal();
+    else els.guide.show();
+  }
+  els.guideOpen.setAttribute('aria-expanded', 'true');
+  guideTabs.find((t) => t.getAttribute('aria-selected') === 'true')?.focus();
+}
+/** Close the guide; `refocus` puts focus back on the button that opened it. */
+function closeGuide(refocus = true): void {
+  if (!els.guide.open) return;
+  els.guide.close();
+  els.guideOpen.setAttribute('aria-expanded', 'false');
+  if (refocus) els.guideOpen.focus();
+}
+els.guideOpen.addEventListener('click', () => (els.guide.open ? closeGuide() : openGuide()));
+els.guideClose.addEventListener('click', () => closeGuide());
+// Esc closes the sheet by itself (cancel); the panel beside the DSKY is not modal, so it is handled here.
+els.guide.addEventListener('cancel', (e) => {
+  e.preventDefault();
+  closeGuide();
+});
+els.guide.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeGuide();
+  }
+});
+// A tap on the dimmed page around the sheet closes it.
+els.guide.addEventListener('click', (e) => {
+  if (e.target === els.guide && els.guide.matches(':modal')) closeGuide();
+});
+// Turning a phone or resizing the window past the breakpoint changes which kind of guide it is.
+oneColumn.addEventListener('change', () => closeGuide(false));
+
+// ---- The lamps lit at power-up
+
+/**
+ * A fresh computer lights PROG and RESTART: memory was blank, so the software did a fresh
+ * start (alarm 01107).  To anyone who has not flown one that looks like a fault, so the first
+ * time they light after a power-up the note under the chips says why, and offers RSET.
+ */
+let watchPowerUpLamps = true;
+let lampNoteShown = false;
+function showLampNote(): void {
+  lampNoteShown = true;
+  els.cmdNote.hidden = false;
+  els.cmdNote.innerHTML =
+    `<b>Why PROG and RESTART are lit.</b> The computer has just powered up with blank memory, so the software did a fresh start and raised ${explain('alarm 01107')}. Nothing is wrong: RSET turns them off. ` +
+    `<button type="button" class="ctl note-do" data-rset>Press RSET for me</button>`;
+  dsky.cue('RSET');
+}
+function hideLampNote(): void {
+  if (!lampNoteShown) return;
+  lampNoteShown = false;
+  els.cmdNote.hidden = true;
+  dsky.cue(null);
+}
+els.cmdNote.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('[data-rset]')) typeKeys(['RSET']);
+});
+
+// ---- What the listing follows, said in its top line
+
+const FOLLOW_STATUS: Record<string, string> = {
+  jobs: 'Following the last job; skips the idle loop and interrupts',
+  all: 'Following every instruction',
+  off: 'Not following the computer',
+};
+function showFollowStatus(): void {
+  const text = FOLLOW_STATUS[els.follow.value] ?? '';
+  if (els.followStatus.textContent !== text) els.followStatus.textContent = text;
+}
+els.follow.addEventListener('change', showFollowStatus);
 
 // ---- Keyboard
 
 document.addEventListener('keydown', (e) => {
   const target = e.target as HTMLElement;
   if (target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
-  // Enter and Space work the focused control: a button, a link, or the alarm list's summary.
-  if (target.closest('button, summary, a[href]') && (e.key === 'Enter' || e.key === ' ')) return;
+  // Enter and Space work the focused control: a button or a link.
+  if (target.closest('button, a[href]') && (e.key === 'Enter' || e.key === ' ')) return;
   const key = KEYBOARD_MAP[e.key] ?? KEYBOARD_MAP[e.key.toLowerCase()];
   if (!key) return;
   e.preventDefault();
@@ -190,6 +372,8 @@ function setRunning(running: boolean): void {
 els.runToggle.addEventListener('click', () => setRunning(!machine?.running));
 els.step.addEventListener('click', () => {
   if (!machine) return;
+  // One instruction at a time is for reading along in the listing.
+  if (deck !== 'computer') setDeck('computer');
   machine.stepInstruction();
   if (els.follow.value === 'off') els.follow.value = 'all';
   refreshPanels(true);
@@ -201,12 +385,15 @@ els.power.addEventListener('click', () => {
   if (!machine) return;
   machine.reset();
   craft.restartChecklist(false);
+  hideLampNote();
+  watchPowerUpLamps = true;
   refreshPanels(true);
 });
 const DESCENT_SETUP = COMMANDS.find((c) => c.setup === 'descent')!;
 els.land.addEventListener('click', async () => {
   if (program?.info.id !== 'Luminary099') await loadProgram('Luminary099');
   if (program?.info.id !== 'Luminary099' || !machine) return;
+  setDeck('moon');
   setRunning(true);
   runCommand(DESCENT_SETUP);
 });
@@ -322,8 +509,13 @@ async function loadProgram(id: string): Promise<void> {
   }
   machine = null;
   craft.attach(null, null);
+  // A new computer powers up with blank memory, so its PROG and RESTART lamps light again.
+  hideLampNote();
+  watchPowerUpLamps = true;
   view?.attach(null);
   dsky.setVehicle(info.vehicle);
+  // The CM has no 3D view: its right side is the computer only.
+  els.right.dataset.vehicle = info.vehicle;
   renderCommands(info.vehicle);
   let loaded = cache.get(id);
   if (!loaded) {
@@ -479,11 +671,14 @@ function refreshPanels(force = false): void {
     } else {
       els.location.textContent = context;
     }
+    els.run.location.replaceChildren(...[...els.location.childNodes].map((n) => n.cloneNode(true)));
   }
+  els.run.routine.textContent = els.routine.textContent;
 
   const cs = agc.mem[REG.TIME2] * 16384 + agc.mem[REG.TIME1];
   const s = Math.floor(cs / 100);
   els.time.textContent = `${String(Math.floor(s / 3600)).padStart(3, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  els.run.time.textContent = els.time.textContent;
   const z = agc.mem[REG.Z] & 0o7777;
   const fb = (agc.mem[REG.FB] >> 10) & 0o37;
   els.regs.z.textContent = z >= 0o2000 && z < 0o4000 ? `${oct(fb + ((fb & 0o30) === 0o30 && agc.outputChannel7 & 0o100 ? 0o10 : 0), 2)},${oct(z, 4)}` : oct(z, 4);
@@ -515,6 +710,7 @@ function refreshPanels(force = false): void {
 
   // Source listing: the executing line and lines that ran since the last refresh.
   const mode = els.follow.value;
+  showFollowStatus();
   const followIndex = mode === 'jobs' ? agc.lastJobRopeIndex : ropeIndex;
   const followLine = followIndex >= 0 ? r.ropeLine[followIndex] : -1;
   source.setCurrent(mode === 'jobs' ? followLine : lineId, mode !== 'off' && followLine >= 0);
@@ -537,9 +733,18 @@ function frame(now: number): void {
   if (machine) {
     machine.frame(now);
     if (!machine.agc.allowInterrupt) inhintSeen = now;
-    dsky.update(readDsky(machine.agc));
+    const shown = readDsky(machine.agc);
+    dsky.update(shown);
+    const { prog, restart } = shown.lamps;
+    if (watchPowerUpLamps && (prog || restart)) {
+      watchPowerUpLamps = false;
+      showLampNote();
+    } else if (lampNoteShown && !prog && !restart) {
+      hideLampNote();
+    }
     craft.update(now);
-    view?.update(craft.litJets);
+    // The 3D view draws only while it can be seen: on a phone it always can, on a wider window on the Moon side.
+    if (oneColumn.matches || deck === 'moon') view?.update(craft.litJets);
     refreshPanels();
   }
   requestAnimationFrame(frame);
@@ -547,8 +752,9 @@ function frame(now: number): void {
 
 // Short forms in the page's fixed text: their meaning shows on hover.
 for (const el of document.querySelectorAll<HTMLElement>('[data-abbr]')) el.innerHTML = abbr(el.textContent!.trim());
-explainIn($('.about'));
-explainIn($('.commands .hint'));
+explainIn($('#gpanel-about'));
+explainIn($('#gpanel-try .hint'));
+$('#intro').append($('#gpanel-about ul').cloneNode(true));
 
 let initial = 'Luminary099';
 try {
@@ -557,5 +763,6 @@ try {
   // storage unavailable
 }
 if (!PROGRAMS.some((p) => p.id === initial)) initial = 'Luminary099';
+setDeck(deck);
 void loadProgram(initial);
 requestAnimationFrame(frame);

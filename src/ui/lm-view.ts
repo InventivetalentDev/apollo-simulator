@@ -280,6 +280,12 @@ export class LmView {
     this.controls.enableDamping = true;
     this.controls.minDistance = 6;
     this.controls.maxDistance = 40;
+    // On a touch screen the view is at the top of the page: a swipe up or down scrolls the
+    // page, a swipe sideways turns the view, and a pinch zooms it.
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      renderer.domElement.style.touchAction = 'pan-y';
+      hint.textContent = 'Swipe sideways to look around, pinch to zoom';
+    }
 
     this.scene.environment = moonshine(renderer);
     this.scene.environmentIntensity = 1.3;

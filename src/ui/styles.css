@@ -82,6 +82,17 @@ kbd {
 kbd + kbd {
   margin-left: 3px;
 }
+/* Words for a mouse and keyboard, or for a touch screen, where nothing can be hovered over */
+@media (hover: none) {
+  .on-pointer {
+    display: none;
+  }
+}
+@media not (hover: none) {
+  .on-touch {
+    display: none;
+  }
+}
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -307,7 +318,8 @@ kbd + kbd {
   color: var(--lamp-white);
 }
 .panel > h2:not(.view3d-title),
-.panel > .craft-head {
+.panel > .craft-head,
+.panel > .panel-head {
   position: absolute;
   top: -10px;
   left: 10px;
@@ -323,7 +335,8 @@ kbd + kbd {
   padding: 0 6px;
   background: var(--bg);
 }
-.panel > .craft-head > * {
+.panel > .craft-head > *,
+.panel > .panel-head > * {
   padding: 0 6px;
   background: var(--bg);
   pointer-events: auto;
@@ -559,21 +572,199 @@ abbr[title] {
   background: linear-gradient(180deg, #34383a, #26292b);
 }
 
-/* ---- Commands */
-.commands {
-  padding: 20px 16px 12px;
+/* ---- Try it: a few commands one click away, and the guide with all of them */
+.try {
+  padding: 18px 14px 12px;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+.quick {
+  display: flex;
+  align-items: flex-start;
   gap: 8px;
 }
-.commands .hint {
+.quick-cmds {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ctl.quick-cmd,
+.ctl.guide-open {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+/* The way in for anyone who does not know a verb from a noun: outlined like the checklist's button */
+.ctl.guide-open {
+  flex: none;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ctl.guide-open[aria-expanded='true'] {
+  background: var(--accent);
+  color: var(--bg);
+}
+.cmd-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.cmd-note b {
+  color: var(--text);
+  font-weight: 600;
+}
+.ctl.note-do {
+  margin-top: 6px;
+  display: inline-block;
+  padding: 4px 12px;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: 14px;
+}
+
+/* The introduction, under the DSKY when there is no LM panel to show there */
+.intro {
+  padding: 18px 16px 14px;
+}
+.craft:not([hidden]) ~ .intro {
+  display: none;
+}
+
+/* ---- Guide: beside the DSKY, over the right column; a sheet from the bottom on phones */
+.layout {
+  position: relative;
+}
+.guide {
+  /* The dialog's own box, reset to the page's */
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  max-height: none;
+  border: 1px solid var(--scribe);
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.55);
+  overscroll-behavior: contain;
+}
+.guide[open] {
+  display: flex;
+  flex-direction: column;
+}
+/* On a wide window the grid's right column is its frame, so it opens next to the DSKY. */
+.guide:not(:modal) {
+  position: absolute;
+  z-index: 5;
+  /* Both lines named: for a positioned item an auto end line is the grid's padding edge, not the column's. */
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+  inset: 10px auto 0 0;
+  width: min(460px, 100%);
+  height: auto;
+  transition:
+    opacity 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    translate 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@starting-style {
+  .guide[open]:not(:modal) {
+    opacity: 0;
+    translate: -14px 0;
+  }
+}
+/* On a phone: a sheet up from the bottom edge, over a dimmed page */
+.guide:modal {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  height: min(82dvh, 720px);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  transition: translate 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@starting-style {
+  .guide[open]:modal {
+    translate: 0 100%;
+  }
+}
+.guide::backdrop {
+  background: rgb(5 6 7 / 0.62);
+}
+.guide-head {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+}
+.tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.tabs [role='tab'] {
+  padding: 12px 14px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 600 15px/18px var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tabs [role='tab']:hover:not([aria-selected='true']) {
+  color: var(--text);
+}
+.tabs [role='tab'][aria-selected='true'] {
+  color: var(--lamp-white);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.tabs [role='tab']:focus-visible,
+.guide-close:focus-visible {
+  outline-offset: -3px;
+}
+.guide-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.guide-close:hover {
+  color: var(--accent);
+}
+.guide-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--line) transparent;
+  padding: 14px 16px 16px;
+}
+.guide-panel[hidden] {
+  display: none;
+}
+.guide-panel:focus-visible {
+  outline-offset: -2px;
+}
+.guide-panel .hint {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
 }
+
+/* ---- Commands */
 #command-list {
   list-style: none;
-  margin: 4px -8px 0;
+  margin: 8px -8px 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -594,10 +785,10 @@ abbr[title] {
   cursor: pointer;
 }
 .cmd:hover {
-  background: var(--panel);
+  background: var(--panel-raised);
 }
 .cmd:active {
-  background: var(--panel-raised);
+  background: var(--bg);
 }
 .cmd .title {
   font-weight: 600;
@@ -619,54 +810,7 @@ abbr[title] {
   font-size: 13px;
 }
 
-/* ---- Alarm codes: a panel like the others that opens; the title stays set into the top line */
-.alarms {
-  padding: 10px 16px;
-}
-.alarms:has(details[open]) {
-  padding: 20px 16px 12px;
-}
-.alarms summary {
-  position: absolute;
-  top: -10px;
-  left: 10px;
-  right: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  list-style: none;
-  cursor: pointer;
-}
-.alarms summary::-webkit-details-marker {
-  display: none;
-}
-.alarms summary > * {
-  padding: 0 6px;
-  background: var(--bg);
-}
-.alarms summary h2::before {
-  content: '▸';
-  display: inline-block;
-  width: 1em;
-  color: var(--label);
-}
-.alarms details[open] summary h2::before {
-  content: '▾';
-}
-.alarms summary:hover h2,
-.alarms summary:hover h2::before {
-  color: var(--accent);
-}
-.alarms .count {
-  color: var(--muted);
-  font: 13px/18px var(--font-mono);
-}
-.alarms .hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
+/* ---- Alarm codes */
 #alarm-search {
   width: 100%;
   margin-top: 10px;
@@ -709,20 +853,20 @@ abbr[title] {
 }
 
 /* ---- About */
-.about {
-  padding: 20px 16px 16px;
-}
-.about a {
+.about a,
+.intro a {
   color: var(--text);
   text-decoration-color: var(--line);
   text-underline-offset: 2px;
 }
-.about a:hover {
+.about a:hover,
+.intro a:hover {
   color: var(--accent);
   text-decoration-color: currentColor;
 }
-.about ul {
-  margin: 8px 0 0;
+.about ul,
+.intro ul {
+  margin: 0;
   padding-left: 18px;
   color: var(--muted);
   font-size: 13px;
@@ -730,6 +874,9 @@ abbr[title] {
   flex-direction: column;
   gap: 6px;
   max-width: 65ch;
+}
+.intro ul {
+  margin-top: 4px;
 }
 
 /* ---- CPU state */
@@ -887,24 +1034,116 @@ abbr[title] {
   color: var(--lamp-white);
 }
 
-/* ---- 3D view */
-/* The 3D view and the attitude ball, side by side */
-.views {
-  /* Gives way first when the window is short, so the right column fits without scrolling the page. */
-  flex: 0 1 auto;
-  height: clamp(200px, 32vh, 420px);
-  min-height: 160px;
+/* ---- Right side: the Moon or the computer */
+.right {
+  gap: 12px;
+}
+.deck-bar {
+  flex: none;
   display: flex;
+  align-items: center;
   gap: 16px;
+  min-width: 0;
 }
-.views:not(:has(> :not([hidden]))) {
-  display: none;
+/* A two-way switch, like the spacecraft switch in the top bar */
+.deck-tabs {
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
 }
-.view3d {
-  position: relative;
-  flex: 1 1 0;
+.deck-tabs [role='tab'] {
+  padding: 6px 16px;
+  font-size: 14px;
+}
+.deck-tabs [role='tab'] + [role='tab'] {
+  border-left: 1px solid var(--line);
+}
+.deck-tabs [role='tab'][aria-selected='true'] {
+  background: var(--panel-raised);
+}
+.deck-tabs [role='tab']:focus-visible {
+  outline-offset: -2px;
+}
+/* What the computer is doing, in one line, while the Moon side is shown */
+.running-line {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.running-line .k {
+  flex: none;
+  color: var(--label);
+  font: 600 12px var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.running-line b {
+  flex: none;
+  color: var(--accent);
+  font: 500 14px var(--font-mono);
+}
+#run-location {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+#run-location a {
+  color: var(--text);
+  text-decoration-color: var(--line);
+  text-underline-offset: 2px;
+}
+#run-location a:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+.run-time {
+  flex: none;
+  margin-left: auto;
+  color: var(--text);
+}
+.deck {
+  /* Sized by the column, not by the listing inside it; a panel's own minimum still holds, and the column scrolls past it. */
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.right[data-deck='moon'] .deck-computer,
+.right[data-deck='computer'] .deck-moon,
+.right[data-deck='computer'] .running-line {
+  display: none;
+}
+/* The CM has no 3D view: its right side is the computer only, without the switch. */
+.right[data-vehicle='CM'] .deck-bar,
+.right[data-vehicle='CM'] .deck-moon {
+  display: none;
+}
+.right[data-vehicle='CM'] .deck-computer {
+  display: flex;
+}
+
+/* ---- 3D view, with the attitude ball and the descent readouts set into it */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 260px;
+}
+.view3d {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.view3d[hidden] {
+  display: none;
 }
 .view3d canvas {
   display: block;
@@ -928,18 +1167,35 @@ abbr[title] {
   pointer-events: none;
   text-shadow: 0 1px 3px rgb(0 0 0 / 0.85);
 }
-
-/* The attitude ball's panel: about as wide as the row is tall, so the ball fills it */
+/* Instruments laid over the view: the panel's paint behind them, so the stars do not run through the figures */
+.stage > .fdai,
+.stage > .descent {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid var(--scribe);
+  border-radius: 3px;
+  background: rgb(11 12 13 / 0.84);
+}
 .fdai {
-  flex: none;
-  width: clamp(220px, 26vh, 300px);
+  right: 12px;
+  bottom: 12px;
+  width: clamp(168px, 24%, 236px);
+  aspect-ratio: 5 / 6;
+  max-height: calc(100% - 24px);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 16px 12px 10px;
+  gap: 2px;
+  padding: 8px 10px 8px;
 }
 .fdai[hidden] {
   display: none;
+}
+.fdai h2 {
+  margin: 0;
+  font: 600 13px/16px var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lamp-white);
 }
 .fdai-ball {
   flex: 1 1 0;
@@ -952,6 +1208,12 @@ abbr[title] {
   font-size: 12px;
   line-height: 1.35;
   color: var(--muted);
+}
+.stage > .descent {
+  top: 10px;
+  right: 12px;
+  width: min(430px, calc(100% - 150px));
+  padding: 6px 8px 8px;
 }
 
 /* ---- Source listing */
@@ -980,6 +1242,15 @@ abbr[title] {
   .source {
     min-height: 256px;
   }
+}
+/* What the listing follows, at the right end of its top line */
+.follow-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font: 13px/18px var(--font-body);
 }
 .source-head {
   display: flex;
@@ -1321,7 +1592,6 @@ abbr[title] {
 /* The powered-descent checklist: what the DSKY asks now and which key answers it */
 .checklist {
   position: relative;
-  margin-top: 8px;
   padding: 14px 12px 10px;
   border: 1px solid rgb(232 163 61 / 0.55);
   border-radius: 3px;
@@ -1494,6 +1764,9 @@ abbr[title] {
   .key.cue::after {
     animation: none;
   }
+  .guide {
+    transition: none;
+  }
 }
 
 /* ---- Narrow screens */
@@ -1520,55 +1793,179 @@ abbr[title] {
     white-space: nowrap;
   }
 }
+/* The phone's version of the subtitle and the insides switch stay out of the way on wider windows. */
+.brand .short,
+.ctl.insides {
+  display: none;
+}
 @media (max-width: 900px) {
   .app {
     height: auto;
   }
+  .topbar {
+    padding: 12px 16px;
+  }
+  /* One column, in the order a visitor wants it: the spacecraft, what to do next, the DSKY,
+     the commands, the LM's controls, and the computer's insides last.  The columns' boxes
+     dissolve so their panels can be put in that order. */
   .layout {
     grid-template-columns: minmax(0, 1fr);
     padding: 16px;
   }
   .left,
-  .left-scroll {
-    overflow: visible;
+  .left-scroll,
+  .right,
+  .right:not([data-vehicle='CM']) .deck-moon {
+    display: contents;
   }
-  .left-scroll {
+  .deck-bar,
+  .right:not([data-insides='open']) .deck-computer {
+    display: none;
+  }
+  .right[data-insides='open'] .deck-computer {
+    display: contents;
+  }
+  .right[data-vehicle='CM'] .stage {
+    display: none;
+  }
+  .stage {
+    order: 1;
     flex: none;
+    height: clamp(280px, 78vw, 480px);
   }
-  .views {
-    height: clamp(220px, 56vw, 420px);
+  #checklist {
+    order: 2;
+  }
+  #dsky-host {
+    order: 3;
+  }
+  .try {
+    order: 4;
+  }
+  .craft {
+    order: 5;
+  }
+  .intro {
+    order: 6;
+  }
+  .ctl.insides {
+    order: 7;
+    display: block;
+    width: 100%;
+    min-height: 44px;
+  }
+  .cpu {
+    order: 8;
   }
   .source {
+    order: 9;
     height: 70vh;
     flex: none;
   }
-  .topbar {
-    padding: 12px 16px;
+  /* Smaller instruments over a smaller view */
+  /* The ball's scale lettering keeps an 8 px minimum, so the ball needs about 130 px to fit it. */
+  .fdai {
+    right: 8px;
+    bottom: 8px;
+    width: 140px;
+    padding: 5px 5px 4px;
+  }
+  .view3d-hint {
+    right: 156px;
+  }
+  .fdai h2 {
+    font-size: 11px;
+    line-height: 14px;
+  }
+  .fdai-key {
+    display: none;
+  }
+  .stage > .descent {
+    top: 34px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    padding: 4px 6px 6px;
+  }
+  .stage > .descent .k small {
+    display: none;
+  }
+  .stage .trio.five {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .stage .trio span {
+    padding: 2px 4px;
+  }
+  .stage .trio b {
+    font-size: 9px;
+    white-space: nowrap;
+  }
+  .stage .trio i {
+    font-size: 12px;
   }
 }
 @media (max-width: 640px) {
-  .views {
-    height: auto;
-    flex-direction: column;
+  /* Title, the landing, then the machine's controls: three short rows */
+  .topbar {
+    gap: 8px 10px;
+    padding: 10px 16px 12px;
   }
-  .view3d {
-    flex: none;
-    height: clamp(220px, 56vw, 420px);
+  .brand {
+    flex-basis: 100%;
   }
-  .fdai {
-    width: auto;
-    height: 300px;
+  .brand h1 {
+    font-size: 21px;
+  }
+  .brand .long {
+    display: none;
+  }
+  .brand .short {
+    display: inline;
+  }
+  .ctl.land {
+    order: 1;
+    flex: 1 1 100%;
+  }
+  .program-switch {
+    order: 2;
+  }
+  .program-switch button {
+    padding: 7px 12px;
+  }
+  /* The spacecraft's short names are enough here; the program names stay for screen readers. */
+  .program-switch span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .run-controls {
+    order: 3;
+    flex: 1;
+    gap: 6px;
+  }
+  .run-controls .ctl {
+    padding: 6px 10px;
+  }
+  .speed {
+    font-size: 0;
+    gap: 0;
+  }
+  .speed select {
+    font-size: 14px;
+  }
+  /* Step is for reading along in the listing, which waits at the bottom until it is opened. */
+  .app:not(:has([data-insides='open'])) #step {
+    display: none;
+  }
+  #power {
+    margin-left: auto;
   }
 }
 @media (max-width: 460px) {
-  .ctl.land,
-  .program-switch {
-    flex: 1 1 100%;
-  }
-  .program-switch button {
-    flex: 1;
-    justify-content: center;
-  }
   .stat.wide {
     grid-column: 1 / -1;
   }
@@ -1583,9 +1980,6 @@ abbr[title] {
   }
   .craft-body {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .trio.five {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .jets {
     max-width: 200px;
