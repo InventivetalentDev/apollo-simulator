@@ -159,6 +159,8 @@ export class LmPanel {
   private resumeSpeed = 0;
   /** The speed to go back to once the crew has answered, or 0 when the checklist did not slow down. */
   private answerSpeed = 0;
+  /** The question the checklist last slowed down for (number and title), or '' while none waits. */
+  private question = '';
   private readonly held = new Set<StickInput>();
   private full = false;
   private readonly jetEls: SVGGElement[] = [];
@@ -354,7 +356,7 @@ export class LmPanel {
     this.checklist = new DescentChecklist(this.addressOf, loaded);
     this.step = this.current = null;
     this.fastForward(false);
-    this.realTime(false);
+    this.realTime(null);
     this.cue(null);
   }
 
@@ -381,16 +383,20 @@ export class LmPanel {
   }
 
   /**
-   * Slow to real time while a step waits for the crew, and go back to the chosen speed after.
-   * At 100× a question would be gone before anyone could read it, and P63 needs the answer
-   * to V99 within seconds of the ignition time.
+   * Slow to real time when a step starts waiting for the crew, and go back to the chosen speed
+   * after.  At 100× a question would be gone before anyone could read it, and P63 needs the
+   * answer to V99 within seconds of the ignition time.  This happens once for each question:
+   * a speed chosen by hand while it waits stays.
    */
-  private realTime(on: boolean): void {
+  private realTime(step: DescentStep | null): void {
+    const question = step ? `${step.number} ${step.title}` : '';
+    if (question === this.question) return;
+    this.question = question;
     const host = this.checklistHost;
-    if (on && !this.answerSpeed && host.speed() > 1) {
+    if (question && host.speed() > 1) {
       this.answerSpeed = host.speed();
       host.setSpeed(1);
-    } else if (!on && this.answerSpeed) {
+    } else if (!question && this.answerSpeed) {
       // Leave the speed alone if it was changed by hand meanwhile.
       if (host.speed() === 1) host.setSpeed(this.answerSpeed);
       this.answerSpeed = 0;
@@ -420,7 +426,7 @@ export class LmPanel {
     }
     this.step = step;
     // Slow down as soon as the computer asks, even while the step before is still on screen.
-    this.realTime(!!next && waitsForCrew(next));
+    this.realTime(next && waitsForCrew(next) ? next : null);
     this.cue(step?.key ?? null);
     this.els.checklist.hidden = !step;
     if (!step) return;
@@ -436,8 +442,8 @@ export class LmPanel {
     set(s.detail, explain(step.detail));
     set(s.timer, step.timer ?? '');
     s.timer.hidden = !step.timer;
-    const slowed = this.answerSpeed > 0 && waitsForCrew(step);
-    set(s.note, slowed ? `Running at 1× until you answer, then back to ${this.answerSpeed}×.` : '');
+    const slowed = this.answerSpeed > 0 && this.checklistHost.speed() === 1 && waitsForCrew(step);
+    set(s.note, slowed ? `Running at 1× until you answer, then back to ${this.answerSpeed}×. To keep another speed, choose it at the top of the page.` : '');
     s.note.hidden = !slowed;
     set(s.warning, step.warning ? explain(step.warning) : '');
     s.warning.hidden = !step.warning;

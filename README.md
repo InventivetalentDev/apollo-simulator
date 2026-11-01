@@ -144,7 +144,7 @@ checklist's **Fast-forward** button runs the simulation at 20× until the
 next step, then returns to the speed you had. The other way round, when the
 checklist asks you to press a key, the simulation runs in real time until
 you do, then returns to the speed you had: at 100× a question would be gone
-before you could read it.
+before you could read it. A speed you choose while a question waits stays.
 
 During the descent the panel shows the LM's true altitude, its speeds
 against the ground, thrust and propellant. The DSKY shows what the computer
