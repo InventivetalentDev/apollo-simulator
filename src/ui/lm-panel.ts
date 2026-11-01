@@ -174,7 +174,7 @@ export class LmPanel {
     descent: HTMLElement;
     descentValues: HTMLElement[];
     checklist: HTMLElement;
-    step: Record<'count' | 'title' | 'detail' | 'act' | 'action' | 'timer' | 'note', HTMLElement>;
+    step: Record<'count' | 'title' | 'detail' | 'act' | 'action' | 'timer' | 'note' | 'warning', HTMLElement>;
     do: HTMLButtonElement;
     modes: HTMLButtonElement[];
     imu: HTMLInputElement;
@@ -196,6 +196,7 @@ export class LmPanel {
           <span class="k" id="checklist-label">Powered descent</span>
           <span class="mono" data-step="count"></span>
         </div>
+        <p class="checklist-warning" data-step="warning" role="alert" hidden></p>
         <div aria-live="polite">
           <p class="checklist-title" data-step="title"></p>
           <p class="checklist-detail" data-step="detail"></p>
@@ -438,6 +439,8 @@ export class LmPanel {
     const slowed = this.answerSpeed > 0 && waitsForCrew(step);
     set(s.note, slowed ? `Running at 1× until you answer, then back to ${this.answerSpeed}×.` : '');
     s.note.hidden = !slowed;
+    set(s.warning, step.warning ? explain(step.warning) : '');
+    s.warning.hidden = !step.warning;
     const canSpeedUp = step.wait && (this.resumeSpeed > 0 || this.checklistHost.speed() < FAST_FORWARD);
     const kbd = (keys: string) => displayKeys(keys).split(' ').map((k) => `<kbd>${abbr(k)}</kbd>`).join(' ');
     set(

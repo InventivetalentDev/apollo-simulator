@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AGC, REG } from '../src/agc/cpu.ts';
 import { readDsky } from '../src/agc/dsky.ts';
-import { descentState, loadDescent, prepareLunarModule } from '../src/sim/descent.ts';
+import { descentState, loadDescent, P63_DEADLINE, prepareLunarModule } from '../src/sim/descent.ts';
 import { DescentEngine, DPS_FULL_THROTTLE, DPS_MINIMUM, pivotToCg } from '../src/sim/descent-engine.ts';
 import { LunarModule } from '../src/sim/lm.ts';
 import { cross } from '../src/sim/attitude.ts';
@@ -265,4 +265,82 @@ test('with no answer to V99 the engine never lights, P63 gives up, and the check
   assert.equal(step.title, 'No answer to V99');
   assert.equal(lm.engine.thrust, 0, 'the engine never lit');
   assert.equal(agc.mem[address('FAILREG')], 0o1406, 'alarm 1406');
+});
+
+/** Luminary099 in the descent setup with the autopilot data loaded, before P63. */
+function readyForP63() {
+  const boot = bootLm();
+  const { agc, lm, run, keys, address } = boot;
+  const state = descentState();
+  prepareLunarModule(lm, state);
+  run(16);
+  loadDescent(agc, lm, address, state);
+  keys('RSET V 4 8 E V 2 1 E 2 1 1 0 2 E PRO V 2 1 E + 3 3 2 9 0 E PRO PRO');
+  run(2);
+  const clock = () => (agc.mem[REG.TIME2] * 2 ** 14 + agc.mem[REG.TIME1]) / 100;
+  const alarms = () => [0, 1, 2].map((k) => agc.mem[address('FAILREG') + k] & 0o37777);
+  return { ...boot, clock, alarms };
+}
+
+test('step 1 counts down to the latest start, and P63 started then, with 12 s for each answer, lights the engine on time', () => {
+  const { agc, lm, run, keys, address, clock, alarms } = readyForP63();
+  const checklist = new DescentChecklist(address);
+  const first = checklist.current(agc, lm)!;
+  assert.equal(first.title, 'Start P63');
+  const [, minutes, seconds] = /^Start P63 within (\d+):(\d\d)$/.exec(first.timer ?? '') ?? [];
+  assert.ok(Math.abs(Number(minutes) * 60 + Number(seconds) - (P63_DEADLINE - clock())) <= 1, `countdown "${first.timer}"`);
+
+  while (clock() < P63_DEADLINE - 0.1) run(0.1);
+  assert.equal(checklist.current(agc, lm)!.title, 'Start P63');
+  keys('V 3 7 E 6 3 E');
+  let ignition = 0;
+  let shownAt = 0;
+  let shown = 0;
+  let pressed = 0;
+  for (let t = 0; t < 300 && !ignition; t += 0.1) {
+    run(0.1);
+    const step = checklist.current(agc, lm)!;
+    assert.equal(step.warning, undefined, `no warning at "${step.title}"`);
+    if (step.number !== shown) [shown, shownAt] = [step.number, clock()];
+    // Every question waits 12 s for its answer, except V99, which comes 5 s before ignition.
+    const thinking = step.title.startsWith('V99') ? 0 : 12;
+    if (step.key && pressed !== step.number && clock() - shownAt >= thinking) {
+      keys(step.key);
+      pressed = step.number;
+    }
+    if (DescentEngine.commandedOn(agc.channels[0o11])) ignition = clock();
+  }
+  const tig = 102 * 3600 + 32 * 60 + 51;
+  assert.ok(Math.abs(ignition - tig) < 1, `ignition ${(ignition - tig).toFixed(1)} s from 102:32:51`);
+  assert.ok(!alarms().includes(0o1703), 'no alarm 1703');
+});
+
+test('after the latest start the checklist says it is too late, and explains alarm 1703 when P63 starts anyway', () => {
+  const { agc, lm, run, keys, address, clock, alarms } = readyForP63();
+  const checklist = new DescentChecklist(address);
+  while (clock() < P63_DEADLINE + 1) run(0.5);
+  let step = checklist.current(agc, lm)!;
+  assert.equal(step.title, 'Too late to start P63');
+  assert.equal(step.timer, undefined, 'no countdown');
+  assert.equal(step.keys, 'V 3 7 E 6 3 E', 'P63 can still be started');
+
+  // Start it 90 s late: even with every question answered at once, the computer slips the ignition.
+  while (clock() < P63_DEADLINE + 90) run(0.5);
+  keys('V 3 7 E 6 3 E');
+  let pressed = 0;
+  for (let t = 0; t < 200 && !step.warning; t += 0.1) {
+    run(0.1);
+    step = checklist.current(agc, lm)!;
+    if (step.key && pressed !== step.number) {
+      keys(step.key);
+      pressed = step.number;
+    }
+  }
+  assert.ok(alarms().includes(0o1703), `alarm 1703 (${alarms().map((a) => a.toString(8))})`);
+  assert.match(step.warning ?? '', /^Alarm 1703: ignition slipped/);
+  assert.ok(readDsky(agc).lamps.prog, 'the PROG lamp is lit');
+  keys('RSET');
+  run(0.5);
+  assert.ok(!alarms().includes(0o1703), 'RSET clears the alarm');
+  assert.match(checklist.current(agc, lm)!.warning ?? '', /^Alarm 1703/, 'the warning stays after RSET');
 });

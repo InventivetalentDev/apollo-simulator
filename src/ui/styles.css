@@ -1235,6 +1235,16 @@ abbr[title] {
   color: var(--muted);
   font-size: 12px;
 }
+.checklist .checklist-warning {
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+  border: 1px solid rgb(255 194 74 / 0.6);
+  border-radius: 4px;
+  background: rgb(255 194 74 / 0.08);
+  color: var(--lamp-amber);
+  font-size: 13px;
+  line-height: 1.4;
+}
 .switches {
   display: flex;
   flex-wrap: wrap;

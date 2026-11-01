@@ -7,6 +7,7 @@ import type { AGC } from '../agc/cpu.ts';
 import { REG } from '../agc/cpu.ts';
 import { readDsky, type DskyState } from '../agc/dsky.ts';
 import type { LunarModule } from '../sim/lm.ts';
+import { P63_DEADLINE } from '../sim/descent.ts';
 import { inertialToMoonFixed } from '../sim/moon.ts';
 
 export interface DescentStep {
@@ -29,6 +30,8 @@ export interface DescentStep {
   timer?: string;
   /** The crew has answered, and the computer has not moved on to the next step yet. */
   answered?: boolean;
+  /** Something went wrong that the crew should know about on every step from now on. */
+  warning?: string;
 }
 
 export const DESCENT_STEPS = 15;
@@ -58,11 +61,30 @@ const distance = (m: number) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000)
 const START: DescentStep = {
   number: 1,
   title: 'Start P63',
-  detail: 'P63 lights the descent engine and flies the braking phase. P64 and P65 take the LM on down to the surface.',
+  detail:
+    'P63 lights the descent engine and flies the braking phase. P64 and P65 take the LM on down to the surface. ' +
+    'The engine must light at one point on the orbit, and P63 needs about a minute and a half to get ready, so start it before the clock below runs out.',
   key: null,
   keys: 'V 3 7 E 6 3 E',
   button: 'Start P63',
 };
+
+const TOO_LATE: DescentStep = {
+  number: 1,
+  title: 'Too late to start P63',
+  detail:
+    'The LM is too close to the point where the engine must light. If you start P63 now, the computer will most likely move the ignition later (alarm 1703), and the descent will miss the landing site. ' +
+    'Click “Land on the Moon” at the top of the page to start again.',
+  key: null,
+  keys: 'V 3 7 E 6 3 E',
+  button: 'Start P63 anyway',
+};
+
+/** IGNITION TIME SLIPPED, from the program's alarm list. */
+const TIG_SLIPPED = 0o1703;
+const SLIPPED_WARNING =
+  'Alarm 1703: ignition slipped. P63 started too late, so the computer moved the ignition later, and the PROG lamp lit. ' +
+  'From there the braking phase cannot reach the landing site, and the LM will most likely crash. Click “Land on the Moon” at the top of the page to try again.';
 
 /** True while the DSKY flashes this verb and noun (or just this verb), waiting for the crew. */
 const asking = (d: DskyState, verbNoun: string) => d.vnFlashing && (d.verb + d.noun === verbNoun || d.verb === verbNoun);
@@ -87,21 +109,26 @@ export class DescentChecklist {
   private v99Noun = '';
   /** The landing radar has had data since ignition. */
   private radarSeen = false;
+  /** The computer slipped the ignition (alarm 1703); kept after RSET clears the alarm. */
+  private slipped = false;
   private last: DescentStep;
   private readonly tigAddress: number;
   private readonly flagsAddress: number;
   private readonly flags7Address: number;
+  private readonly failAddress: number;
   private readonly loaded: boolean;
 
   /**
    * `addressOf` finds erasable symbols (-1 when missing): TIG, the ignition
-   * time, for the countdown, and flagword 11 for the landing radar.
+   * time, for the countdown, flagword 11 for the landing radar, and FAILREG
+   * for alarm 1703.
    * `loaded` is false when the computer's memory no longer holds the descent setup.
    */
   constructor(addressOf: (name: string) => number = () => -1, loaded = true) {
     this.tigAddress = addressOf('TIG');
     this.flagsAddress = addressOf('FLGWRD11');
     this.flags7Address = addressOf('FLAGWRD7');
+    this.failAddress = addressOf('FAILREG');
     this.loaded = loaded;
     this.last = loaded ? START : RELOAD;
   }
@@ -126,11 +153,15 @@ export class DescentChecklist {
     if (lm.engine.thrust > 0 && !this.ignitionAt) this.ignitionAt = now;
     if (this.ignitionAt && lm.radarRange !== null) this.radarSeen = true;
     const radarUsed = this.flagsAddress >= 0 && (agc.mem[this.flagsAddress] & LRINH_BIT) !== 0;
+    // FAILREG holds the first, the second and the latest alarm code.
+    const alarms = this.failAddress >= 0 ? [0, 1, 2].map((k) => agc.mem[this.failAddress + k] & 0o37777) : [];
+    if (alarms.includes(TIG_SLIPPED)) this.slipped = true;
 
     const step = this.match(d, lm, now, tig, radarUsed);
     // Between displays the DSKY is briefly blank: keep showing the step just answered.
     if (step) this.last = step;
-    return step ?? { ...this.last, answered: true };
+    const shown = step ?? { ...this.last, answered: true };
+    return this.slipped ? { ...shown, warning: SLIPPED_WARNING } : shown;
   }
 
   /** The DSKY as the crew reads it: V99 goes on asking through P63's once-a-second rewrites of it. */
@@ -191,7 +222,10 @@ export class DescentChecklist {
         timer: sinceIgnition,
       };
     }
-    if (!this.startedP63) return this.loaded ? START : RELOAD;
+    if (!this.startedP63) {
+      if (!this.loaded) return RELOAD;
+      return now < P63_DEADLINE ? { ...START, timer: `Start P63 within ${clock(P63_DEADLINE - now)}` } : TOO_LATE;
+    }
     if (asking(d, '0661')) {
       return {
         number: 2,

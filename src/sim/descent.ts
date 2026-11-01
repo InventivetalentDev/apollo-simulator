@@ -33,6 +33,16 @@ const NMI = 1852;
 export const SETUP_TIME = 102 * HOUR + 27 * MINUTE;
 /** Planned landing time, 102:47:11 (TLAND as uplinked for the landing). */
 export const LANDING_TIME = 102 * HOUR + 47 * MINUTE + 11;
+/**
+ * The latest time to start P63 (VERB 37, 63) and still light the engine on
+ * time, 102:30:15.  P63 sets ignition at 102:32:51 for this setup.  The crew
+ * must accept the ignition attitude at least 63 s before that, or the
+ * computer cannot coast its state to 30 s before ignition in time: it slips
+ * the ignition (alarm 1703), and the burn starts past the point it was
+ * planned for.  From VERB 37 to that answer, P63 computes and turns for about
+ * 30 s; this leaves the crew another minute to read and answer the questions.
+ */
+export const P63_DEADLINE = 102 * HOUR + 30 * MINUTE + 15;
 /** Time of the descent orbit's low point: Apollo 11 ignited at 102:33:05. */
 const PERILUNE_TIME = 102 * HOUR + 33 * MINUTE + 5;
 /** The low point lies this far before the landing site, measured from the Moon's centre. */

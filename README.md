@@ -109,7 +109,10 @@ ignition to touchdown at Tranquility Base.
    autopilot data. **Set up powered descent** in "Try it" does the same.
 2. In the checklist at the top of the Lunar Module panel, click **Start
    P63**. P63 computes the ignition time, about 102:32:50 (Apollo 11 lit at
-   102:33:05).
+   102:33:05). Start it by 102:30:15; the checklist counts down to then.
+   Later than that, the computer will most likely slip the ignition (alarm
+   1703): the burn starts past the point it was planned for, and the descent
+   misses the landing site. The checklist warns you when that happens.
 3. Answer P63 on the DSKY. For each question the checklist explains what
    it means and lights up the key that answers it. Press the lit key, or
    click **Press it for me**. The questions are:
