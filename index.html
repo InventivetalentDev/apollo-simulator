@@ -123,7 +123,10 @@
             </section>
 
             <section class="panel source" aria-labelledby="source-title">
-              <h2 id="source-title">Source code</h2>
+              <div class="panel-head">
+                <h2 id="source-title">Source code</h2>
+                <span class="follow-status" id="follow-status"></span>
+              </div>
               <div class="source-head">
                 <label class="visually-hidden" for="source-file">Source file</label>
                 <select id="source-file"></select>
@@ -136,7 +139,7 @@
                 </div>
                 <label class="follow" for="follow">Follow
                   <select id="follow">
-                    <option value="jobs" selected>Jobs</option>
+                    <option value="jobs" selected>Last job</option>
                     <option value="all">Every instruction</option>
                     <option value="off">Off</option>
                   </select>
@@ -174,11 +177,11 @@
             </button>
           </div>
           <section class="guide-panel commands" id="gpanel-try" role="tabpanel" aria-labelledby="gtab-try" tabindex="0">
-            <p class="hint">Click a command to key it into the DSKY, or type on your keyboard: digits, <kbd>V</kbd>&nbsp;verb, <kbd>N</kbd>&nbsp;noun, <kbd>Enter</kbd>, <kbd>C</kbd>&nbsp;clear, <kbd>P</kbd>&nbsp;pro, <kbd>K</kbd>&nbsp;key&nbsp;rel, <kbd>R</kbd>&nbsp;reset.</p>
+            <p class="hint"><span class="on-pointer">Click a command to key it into the DSKY, or type on your keyboard: digits, <kbd>V</kbd>&nbsp;verb, <kbd>N</kbd>&nbsp;noun, <kbd>Enter</kbd>, <kbd>C</kbd>&nbsp;clear, <kbd>P</kbd>&nbsp;pro, <kbd>K</kbd>&nbsp;key&nbsp;rel, <kbd>R</kbd>&nbsp;reset.</span><span class="on-touch">Tap a command to key it into the DSKY.</span></p>
             <ul id="command-list"></ul>
           </section>
           <section class="guide-panel alarms" id="gpanel-alarms" role="tabpanel" aria-labelledby="gtab-alarms" tabindex="0" hidden>
-            <p class="hint">When the PROG lamp lights, key VERB 05 NOUN 09 to show the alarm codes, then hover over one on the DSKY for its meaning. <span id="alarm-count"></span></p>
+            <p class="hint">When the PROG lamp lights, key VERB 05 NOUN 09 to show the alarm codes, then <span class="on-pointer">hover over one on the DSKY for its meaning, or </span>look it up here. <span id="alarm-count"></span></p>
             <input type="search" id="alarm-search" placeholder="Code or word, such as 1202 or RADAR" aria-label="Search the alarm codes" autocomplete="off" />
             <ul id="alarm-list"></ul>
             <p class="hint" id="alarm-empty" hidden>No alarm code matches.</p>

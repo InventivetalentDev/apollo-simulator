@@ -82,6 +82,17 @@ kbd {
 kbd + kbd {
   margin-left: 3px;
 }
+/* Words for a mouse and keyboard, or for a touch screen, where nothing can be hovered over */
+@media (hover: none) {
+  .on-pointer {
+    display: none;
+  }
+}
+@media not (hover: none) {
+  .on-touch {
+    display: none;
+  }
+}
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -307,7 +318,8 @@ kbd + kbd {
   color: var(--lamp-white);
 }
 .panel > h2:not(.view3d-title),
-.panel > .craft-head {
+.panel > .craft-head,
+.panel > .panel-head {
   position: absolute;
   top: -10px;
   left: 10px;
@@ -323,7 +335,8 @@ kbd + kbd {
   padding: 0 6px;
   background: var(--bg);
 }
-.panel > .craft-head > * {
+.panel > .craft-head > *,
+.panel > .panel-head > * {
   padding: 0 6px;
   background: var(--bg);
   pointer-events: auto;
@@ -603,6 +616,14 @@ abbr[title] {
 .cmd-note b {
   color: var(--text);
   font-weight: 600;
+}
+.ctl.note-do {
+  margin-top: 6px;
+  display: inline-block;
+  padding: 4px 12px;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: 14px;
 }
 
 /* The introduction, under the DSKY when there is no LM panel to show there */
@@ -1221,6 +1242,15 @@ abbr[title] {
   .source {
     min-height: 256px;
   }
+}
+/* What the listing follows, at the right end of its top line */
+.follow-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font: 13px/18px var(--font-body);
 }
 .source-head {
   display: flex;

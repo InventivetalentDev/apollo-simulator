@@ -60,7 +60,7 @@ export const COMMANDS: Command[] = [
     title: 'Show the alarm codes',
     keys: 'V 0 5 N 0 9 E',
     chip: 'Show alarms',
-    detail: 'At power-up the PROG lamp is lit with alarm 01107: erasable memory was blank, so the software did a fresh start. Hover over a code on the DSKY for its meaning, or look it up under Alarm codes in the Guide.',
+    detail: 'At power-up the PROG lamp is lit with alarm 01107: erasable memory was blank, so the software did a fresh start. The Guide’s Alarm codes tab says what each code means.',
   },
   {
     title: 'Clear the alarm lamps',

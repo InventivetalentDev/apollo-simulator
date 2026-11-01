@@ -38,6 +38,7 @@ const els = {
   loadingText: $('#loading-text'),
   retry: $<HTMLButtonElement>('#loading-retry'),
   status: $('#assembly-status'),
+  followStatus: $('#follow-status'),
   routine: $('#cpu-routine'),
   location: $('#cpu-location'),
   time: $('#cpu-time'),
@@ -245,6 +246,8 @@ function runCommand(command: Command): void {
     });
     craft.attach(machine.lm, machine.agc, (name) => symbols.find((s) => s.name === name)?.value ?? -1);
   }
+  watchPowerUpLamps = false;
+  hideLampNote();
   typeKeys(parseKeys(command.keys));
   // What the command does stays under the chips until the next one; a setup's checklist explains itself.
   els.cmdNote.hidden = !!command.setup;
@@ -303,6 +306,46 @@ els.guide.addEventListener('click', (e) => {
 // Turning a phone or resizing the window past the breakpoint changes which kind of guide it is.
 oneColumn.addEventListener('change', () => closeGuide(false));
 
+// ---- The lamps lit at power-up
+
+/**
+ * A fresh computer lights PROG and RESTART: memory was blank, so the software did a fresh
+ * start (alarm 01107).  To anyone who has not flown one that looks like a fault, so the first
+ * time they light after a power-up the note under the chips says why, and offers RSET.
+ */
+let watchPowerUpLamps = true;
+let lampNoteShown = false;
+function showLampNote(): void {
+  lampNoteShown = true;
+  els.cmdNote.hidden = false;
+  els.cmdNote.innerHTML =
+    `<b>Why PROG and RESTART are lit.</b> The computer has just powered up with blank memory, so the software did a fresh start and raised ${explain('alarm 01107')}. Nothing is wrong: RSET turns them off. ` +
+    `<button type="button" class="ctl note-do" data-rset>Press RSET for me</button>`;
+  dsky.cue('RSET');
+}
+function hideLampNote(): void {
+  if (!lampNoteShown) return;
+  lampNoteShown = false;
+  els.cmdNote.hidden = true;
+  dsky.cue(null);
+}
+els.cmdNote.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('[data-rset]')) typeKeys(['RSET']);
+});
+
+// ---- What the listing follows, said in its top line
+
+const FOLLOW_STATUS: Record<string, string> = {
+  jobs: 'Following the last job; skips the idle loop and interrupts',
+  all: 'Following every instruction',
+  off: 'Not following the computer',
+};
+function showFollowStatus(): void {
+  const text = FOLLOW_STATUS[els.follow.value] ?? '';
+  if (els.followStatus.textContent !== text) els.followStatus.textContent = text;
+}
+els.follow.addEventListener('change', showFollowStatus);
+
 // ---- Keyboard
 
 document.addEventListener('keydown', (e) => {
@@ -342,6 +385,8 @@ els.power.addEventListener('click', () => {
   if (!machine) return;
   machine.reset();
   craft.restartChecklist(false);
+  hideLampNote();
+  watchPowerUpLamps = true;
   refreshPanels(true);
 });
 const DESCENT_SETUP = COMMANDS.find((c) => c.setup === 'descent')!;
@@ -464,6 +509,9 @@ async function loadProgram(id: string): Promise<void> {
   }
   machine = null;
   craft.attach(null, null);
+  // A new computer powers up with blank memory, so its PROG and RESTART lamps light again.
+  hideLampNote();
+  watchPowerUpLamps = true;
   view?.attach(null);
   dsky.setVehicle(info.vehicle);
   // The CM has no 3D view: its right side is the computer only.
@@ -662,6 +710,7 @@ function refreshPanels(force = false): void {
 
   // Source listing: the executing line and lines that ran since the last refresh.
   const mode = els.follow.value;
+  showFollowStatus();
   const followIndex = mode === 'jobs' ? agc.lastJobRopeIndex : ropeIndex;
   const followLine = followIndex >= 0 ? r.ropeLine[followIndex] : -1;
   source.setCurrent(mode === 'jobs' ? followLine : lineId, mode !== 'off' && followLine >= 0);
@@ -684,7 +733,15 @@ function frame(now: number): void {
   if (machine) {
     machine.frame(now);
     if (!machine.agc.allowInterrupt) inhintSeen = now;
-    dsky.update(readDsky(machine.agc));
+    const shown = readDsky(machine.agc);
+    dsky.update(shown);
+    const { prog, restart } = shown.lamps;
+    if (watchPowerUpLamps && (prog || restart)) {
+      watchPowerUpLamps = false;
+      showLampNote();
+    } else if (lampNoteShown && !prog && !restart) {
+      hideLampNote();
+    }
     craft.update(now);
     // The 3D view draws only while it can be seen: on a phone it always can, on a wider window on the Moon side.
     if (oneColumn.matches || deck === 'moon') view?.update(craft.litJets);

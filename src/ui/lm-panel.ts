@@ -226,7 +226,7 @@ export class LmPanel {
         ${STICK_BUTTONS.map((b) => `<button type="button" class="ctl" data-stick="${b.input}" title="${b.title}">${b.label}</button>`).join('')}
         <button type="button" class="ctl kick" data-kick title="Give the LM a random turn and watch the autopilot stop it">Disturb</button>
       </div>
-      <p class="hint">Keys: <kbd>↑</kbd><kbd>↓</kbd> pitch, <kbd>←</kbd><kbd>→</kbd> roll, <kbd>A</kbd><kbd>D</kbd> yaw, <kbd>Shift</kbd> full stick.</p>`;
+      <p class="hint on-pointer">Keys: <kbd>↑</kbd><kbd>↓</kbd> pitch, <kbd>←</kbd><kbd>→</kbd> roll, <kbd>A</kbd><kbd>D</kbd> yaw, <kbd>Shift</kbd> full stick.</p>`;
     parts.checklist.innerHTML = `
       <div class="checklist-head">
         <span class="k" id="checklist-label">Powered descent</span>
