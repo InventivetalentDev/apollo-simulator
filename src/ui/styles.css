@@ -10,7 +10,7 @@
   --text: #dedcd2;
   --muted: #94948d;
   --accent: #e8a33d; /* caution amber: the executing line, focus, active controls */
-  --el: #8dffb0; /* electroluminescent display green */
+  --el: #8dffb0; /* electroluminescent display green: only what the computer itself shows or does */
   --el-dim: #15261b;
   --lamp-white: #f1efe2;
   --lamp-amber: #ffc24a;
@@ -605,7 +605,7 @@ abbr[title] {
 .cmd .keys {
   justify-self: end;
   font: 12px var(--font-mono);
-  color: var(--el);
+  color: var(--label);
   white-space: nowrap;
 }
 .cmd.long .keys {
@@ -859,13 +859,13 @@ abbr[title] {
 }
 .rupt b {
   font-weight: 500;
-  color: var(--text);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   min-width: 3ch;
   text-align: right;
 }
 .rupt.active b {
-  color: var(--el);
+  color: var(--lamp-white);
 }
 
 /* ---- 3D view */
@@ -1096,7 +1096,7 @@ abbr[title] {
   color: var(--text);
 }
 .row.flash {
-  background: rgb(141 255 176 / 0.12);
+  background: rgb(241 239 226 / 0.08);
 }
 .row.corrected .ln {
   color: var(--accent);
@@ -1134,7 +1134,7 @@ abbr[title] {
   font-size: 13px;
 }
 .source-foot .ok {
-  color: var(--el);
+  color: var(--lamp-white);
 }
 .source-foot .warn {
   color: var(--accent);
@@ -1176,7 +1176,7 @@ abbr[title] {
   width: 18px;
   height: 18px;
   border: 2px solid var(--line);
-  border-top-color: var(--el);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
 }
@@ -1197,7 +1197,7 @@ abbr[title] {
   display: none;
 }
 .craft-status {
-  color: var(--el);
+  color: var(--text);
   font: 500 13px/18px var(--font-mono);
   text-align: right;
 }
@@ -1377,7 +1377,7 @@ abbr[title] {
 }
 .checklist .checklist-timer {
   margin-top: 4px;
-  color: var(--el);
+  color: var(--text);
   font-size: 13px;
 }
 .checklist .checklist-note {
