@@ -6,7 +6,7 @@ keyboard) and a live view of the 1969 source code as it executes. In the
 Lunar Module, the computer flies a simulated spacecraft: the original
 autopilot reads the IMU and fires the RCS jets.
 
-![The simulator running the Lunar Module software during a lamp test](docs/screenshot-desktop.png)
+![The simulator after Land on the Moon: the DSKY during a lamp test, the descent checklist, and the Lunar Module in the 3D view](docs/screenshot-desktop.png)
 
 The source is not translated or rewritten. The page loads the original
 `.agc` files from [chrislgarry/Apollo-11](https://github.com/chrislgarry/Apollo-11),
@@ -164,7 +164,7 @@ Its altitude then drifts about 50 m high by high gate, because its
 powered-flight gravity treats the Moon as a sphere, and the LM reaches the
 ground before the computer expects it.
 
-<img src="docs/screenshot-phone.png" alt="The simulator on a phone" width="300" />
+<img src="docs/screenshot-phone.png" alt="The simulator on a phone after Land on the Moon, with the 3D view first" width="300" />
 
 ## How it works
 
