@@ -619,36 +619,51 @@ abbr[title] {
   font-size: 13px;
 }
 
-/* ---- Alarm codes */
+/* ---- Alarm codes: a panel like the others that opens; the title stays set into the top line */
 .alarms {
-  padding: 14px 16px 16px;
+  padding: 10px 16px;
+}
+.alarms:has(details[open]) {
+  padding: 20px 16px 12px;
 }
 .alarms summary {
+  position: absolute;
+  top: -10px;
+  left: 10px;
+  right: 10px;
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  list-style: none;
   cursor: pointer;
 }
 .alarms summary::-webkit-details-marker {
   display: none;
 }
-.alarms summary::before {
-  content: '▸';
-  color: var(--muted);
-  font-size: 12px;
+.alarms summary > * {
+  padding: 0 6px;
+  background: var(--bg);
 }
-.alarms details[open] summary::before {
+.alarms summary h2::before {
+  content: '▸';
+  display: inline-block;
+  width: 1em;
+  color: var(--label);
+}
+.alarms details[open] summary h2::before {
   content: '▾';
 }
-.alarms summary h2 {
-  margin: 0;
+.alarms summary:hover h2,
+.alarms summary:hover h2::before {
+  color: var(--accent);
 }
 .alarms .count {
   color: var(--muted);
-  font-size: 13px;
+  font: 13px/18px var(--font-mono);
 }
 .alarms .hint {
-  margin: 8px 0 0;
+  margin: 0;
   color: var(--muted);
   font-size: 13px;
 }
@@ -657,29 +672,30 @@ abbr[title] {
   margin-top: 10px;
   padding: 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--panel-raised);
   color: var(--text);
   font: 14px var(--font-body);
 }
 #alarm-list {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   padding: 0;
 }
 #alarm-list li {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 12px;
-  padding: 6px 0;
+  padding: 7px 0;
   border-top: 1px solid var(--line);
 }
 #alarm-list li[hidden] {
   display: none;
 }
+/* A reference list, not the computer showing a code: lettering white, not display green */
 #alarm-list code {
-  font: 13px var(--font-mono);
-  color: var(--el);
+  font: 500 13px/1.45 var(--font-mono);
+  color: var(--lamp-white);
 }
 #alarm-list p {
   margin: 0;
@@ -687,6 +703,9 @@ abbr[title] {
 }
 #alarm-list .note {
   color: var(--muted);
+}
+#alarm-empty {
+  margin-top: 10px;
 }
 
 /* ---- About */
@@ -1385,14 +1404,15 @@ abbr[title] {
   color: var(--muted);
   font-size: 12px;
 }
+/* Lit like the DSKY's PROG lamp: the alarm it reports is the one that lamp shows */
 .checklist .checklist-warning {
-  margin: 6px 0 4px;
-  padding: 6px 8px;
-  border: 1px solid rgb(255 194 74 / 0.6);
-  border-radius: 4px;
-  background: rgb(255 194 74 / 0.08);
-  color: var(--lamp-amber);
+  margin: 6px 0 8px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  background: var(--lamp-amber);
+  color: #1b1d1e;
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.4;
 }
 .switches {
