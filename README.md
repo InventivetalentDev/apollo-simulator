@@ -50,7 +50,9 @@ Click the keys or type on your keyboard: digits, `V` (VERB), `N` (NOUN),
 `Enter` (ENTR), `C` (CLR), `P` (PRO), `K` (KEY REL), `R` (RSET). Hover
 over a key, a lamp, or a dotted-underlined short form such as T4RUPT or V99
 to see what it means; verb and noun names come from the loaded program's
-own lists. The "Try it" panel has ready-made sequences:
+own lists. So do the alarm codes: when the PROG lamp lights, key VERB 05
+NOUN 09 and hover over a code on the DSKY, or search the "Alarm codes"
+panel under "Try it". The "Try it" panel has ready-made sequences:
 
 | Keys                  | What it does                                                            |
 | --------------------- | ----------------------------------------------------------------------- |

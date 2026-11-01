@@ -10,7 +10,7 @@ import { DskyView, KEYBOARD_MAP } from './dsky-view.ts';
 import { LmPanel } from './lm-panel.ts';
 import type { LmView } from './lm-view.ts';
 import { Machine } from './machine.ts';
-import { abbr, explain, explainIn, setVerbsAndNouns } from './glossary.ts';
+import { abbr, alarmLine, alarmList, escapeHtml, explain, explainIn, programName, setProgramLists } from './glossary.ts';
 import { formatAddress, ropeIndexOf, SourceView, type SourceLinker } from './source-view.ts';
 
 interface LoadedProgram {
@@ -59,6 +59,10 @@ const els = {
   speedShown: $('#cpu-speed'),
   rupts: $('#cpu-rupts'),
   commands: $('#command-list'),
+  alarms: $('#alarm-list'),
+  alarmSearch: $<HTMLInputElement>('#alarm-search'),
+  alarmCount: $('#alarm-count'),
+  alarmEmpty: $('#alarm-empty'),
   leftScroll: $('.left-scroll'),
 };
 
@@ -109,6 +113,30 @@ function renderCommands(vehicle: 'LM' | 'CM'): void {
         `<span class="keys">${explain(displayKeys(c.keys))}</span><span class="detail">${explain(c.detail)}</span></button></li>`,
   ).join('');
 }
+/** The loaded program's alarm list, each code with what it means, what sets it, and what the computer does. */
+function renderAlarms(): void {
+  const alarms = alarmList();
+  els.alarmCount.textContent = `${alarms.length} in ${programName()}`;
+  els.alarms.innerHTML = alarms
+    .map((a) => {
+      const words = [a.code, ...a.variants.map((v) => `${v.text} ${v.setBy}`), a.note].join(' ').toLowerCase();
+      const lines = a.variants.map((v) => `<p>${escapeHtml(alarmLine(v))}</p>`).join('');
+      return `<li data-words="${escapeHtml(words)}"><code>${a.code}</code><div>${lines}${a.note ? `<p class="note">${escapeHtml(a.note)}</p>` : ''}</div></li>`;
+    })
+    .join('');
+  filterAlarms();
+}
+function filterAlarms(): void {
+  const query = els.alarmSearch.value.trim().toLowerCase();
+  let shown = 0;
+  for (const li of els.alarms.children as HTMLCollectionOf<HTMLElement>) {
+    li.hidden = !!query && !li.dataset.words!.includes(query);
+    if (!li.hidden) shown++;
+  }
+  els.alarmEmpty.hidden = shown > 0;
+}
+els.alarmSearch.addEventListener('input', filterAlarms);
+
 els.commands.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-cmd]');
   if (!btn) return;
@@ -141,7 +169,8 @@ function runCommand(command: Command): void {
 document.addEventListener('keydown', (e) => {
   const target = e.target as HTMLElement;
   if (target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (target.closest('button') && (e.key === 'Enter' || e.key === ' ')) return;
+  // Enter and Space work the focused control: a button, a link, or the alarm list's summary.
+  if (target.closest('button, summary, a[href]') && (e.key === 'Enter' || e.key === ' ')) return;
   const key = KEYBOARD_MAP[e.key] ?? KEYBOARD_MAP[e.key.toLowerCase()];
   if (!key) return;
   e.preventDefault();
@@ -332,10 +361,11 @@ async function loadProgram(id: string): Promise<void> {
   heatBase = new Map();
   lastLocation = ''; // both programs share file names, so the link must be rebuilt
   const { response } = loaded;
-  // Hover text for verb and noun numbers comes from this program's own lists.
+  // Hover text for verb and noun numbers and alarm codes comes from this program's own lists.
   const lists = response.result.files.findIndex((f) => f.name === 'ASSEMBLY_AND_OPERATION_INFORMATION.agc');
-  setVerbsAndNouns(response.texts[lists], info.id.replace(/(\D)(\d)/, '$1 $2'));
+  setProgramLists(response.texts[lists], info.id.replace(/(\D)(\d)/, '$1 $2'));
   renderCommands(info.vehicle);
+  renderAlarms();
   source.load(
     response.result,
     response.texts,

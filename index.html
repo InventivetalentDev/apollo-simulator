@@ -59,6 +59,15 @@
               <p class="hint">Click a command to key it into the DSKY, or type on your keyboard: digits, <kbd>V</kbd>&nbsp;verb, <kbd>N</kbd>&nbsp;noun, <kbd>Enter</kbd>, <kbd>C</kbd>&nbsp;clear, <kbd>P</kbd>&nbsp;pro, <kbd>K</kbd>&nbsp;key&nbsp;rel, <kbd>R</kbd>&nbsp;reset.</p>
               <ul id="command-list"></ul>
             </section>
+            <section class="panel alarms" aria-labelledby="alarms-title">
+              <details>
+                <summary><h2 id="alarms-title">Alarm codes</h2> <span class="count" id="alarm-count"></span></summary>
+                <p class="hint">When the PROG lamp lights, key VERB 05 NOUN 09 to show the alarm codes, then hover over one on the DSKY for its meaning. This list comes from the program's own listing.</p>
+                <input type="search" id="alarm-search" placeholder="Code or word, such as 1202 or RADAR" aria-label="Search the alarm codes" autocomplete="off" />
+                <ul id="alarm-list"></ul>
+                <p class="hint" id="alarm-empty" hidden>No alarm code matches.</p>
+              </details>
+            </section>
             <section class="panel about" aria-labelledby="about-title">
               <h2 id="about-title">What you are looking at</h2>
               <ul>

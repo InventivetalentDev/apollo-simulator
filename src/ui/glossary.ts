@@ -1,8 +1,9 @@
 // Short forms on the page, spelled out with what they mean.  `abbr()` wraps a
 // label in an <abbr> whose title shows on hover.  `explain()` does the same
-// for the first use of each short form in a sentence, and for verb, noun and
-// program numbers (V06, N62, VERB 57, P63).  The verb and noun names come from
-// the loaded program's own lists in ASSEMBLY_AND_OPERATION_INFORMATION.agc.
+// for the first use of each short form in a sentence, for verb, noun and
+// program numbers (V06, N62, VERB 57, P63), and for alarm codes (alarm 1703).
+// The verb and noun names and the alarm codes come from the loaded program's
+// own lists in ASSEMBLY_AND_OPERATION_INFORMATION.agc.
 
 /** Short forms that `explain()` finds in text. */
 const TERMS: Record<string, string> = {
@@ -97,8 +98,34 @@ const PROGRAMS: Record<string, string> = {
   '68': 'landing confirmation.',
 };
 
+/** What the computer does when the alarm comes up. */
+export type AlarmKind = 'alarm' | 'restart' | 'abort' | 'priority';
+
+/** One line of a program's alarm list.  A code can have more than one, set by different routines. */
+export interface AlarmVariant {
+  text: string;
+  setBy: string;
+  kind: AlarmKind;
+}
+
+export interface Alarm {
+  /** Five octal digits, as VERB 05 NOUN 09 shows it. */
+  code: string;
+  variants: AlarmVariant[];
+  /** A note the list adds under the code, or ''. */
+  note: string;
+}
+
+const KIND_TEXT: Record<AlarmKind, string> = {
+  alarm: 'The program carries on.',
+  restart: 'The computer does a software restart.',
+  abort: 'The program is abandoned.',
+  priority: 'A priority alarm.',
+};
+
 let verbs = new Map<string, string>();
 let nouns = new Map<string, string>();
+let alarms = new Map<string, Alarm>();
 let listName = '';
 
 /** Read the verb and noun names from a program's ASSEMBLY_AND_OPERATION_INFORMATION.agc. */
@@ -117,14 +144,106 @@ export function parseVerbsAndNouns(text: string): { verbs: Map<string, string>; 
   return found;
 }
 
-/** Use this program's verb and noun names from now on. */
-export function setVerbsAndNouns(listing: string | undefined, computer: string): void {
+const expandTabs = (line: string) => {
+  let out = '';
+  for (const c of line) out += c === '\t' ? ' '.repeat(8 - (out.length % 8)) : c;
+  return out;
+};
+
+/** Luminary marks the type before the text; Comanche names the alarm routine in a last column. */
+function alarmKind(mark: string, routine: string): AlarmKind {
+  if (routine) return /BAILOUT/.test(routine) ? 'restart' : /POODOO|CURTAINS/.test(routine) ? 'abort' : /PRIOLARM/.test(routine) ? 'priority' : 'alarm';
+  return mark === '*' ? 'restart' : mark === '**' ? 'abort' : mark === 'P' ? 'priority' : 'alarm';
+}
+
+/**
+ * Read the alarm codes from a program's ASSEMBLY_AND_OPERATION_INFORMATION.agc.
+ * The list is laid out in columns, with tabs to every 8th: the code, a type
+ * mark, the text from column 16, the routine that sets it from column 56, and
+ * in Comanche the alarm routine from about column 96.  Lines without a code
+ * continue the one above; a line starting before column 16 is a note.
+ */
+export function parseAlarms(text: string): Map<string, Alarm> {
+  const found = new Map<string, Alarm>();
+  const add = (to: string, more: string, gap: string) => (!more ? to : to ? `${to}${gap}${more}` : more);
+  let inList = false;
+  let last: Alarm | undefined;
+  for (const raw of text.split('\n')) {
+    if (/ALARM CODES FOR/.test(raw)) inList = true;
+    if (!inList || !raw.startsWith('#') || /^# Page \d/.test(raw)) continue;
+    if (/INDICATES|CHECKLIST CODES/.test(raw)) break;
+    const line = expandTabs(` ${raw.slice(1)}`);
+    const code = /^ {2}(\d{5})(?!\S)/.exec(line)?.[1];
+    if (!code && !last) continue; // the list's headings
+    // On a code line, columns 7 to 15 hold the type mark, if any.
+    const mark = code ? line.slice(7, 16).trim() : '';
+    const fields = [...(code ? ' '.repeat(16) + line.slice(16) : line).matchAll(/\S+(?: \S+)*/g)].map((m) => ({ at: m.index, text: m[0] }));
+    if (!code && fields[0] && fields[0].at < 16) {
+      last!.note = add(last!.note, fields.map((f) => f.text).join(' '), ' ');
+      continue;
+    }
+    const words = fields.filter((f) => f.at < 56);
+    const setBy = fields.filter((f) => f.at >= 56 && f.at < 90).map((f) => f.text).join(' ');
+    const routine = fields.filter((f) => f.at >= 90).map((f) => f.text).join(' ');
+    const said = words.map((f) => f.text).join(' ');
+    if (code && code !== last?.code) {
+      last = { code, variants: [{ text: said, setBy, kind: alarmKind(mark, routine) }], note: '' };
+      found.set(code, last);
+    } else if (code && words[0]?.at === 16) {
+      last!.variants.push({ text: said, setBy, kind: alarmKind(mark, routine) });
+    } else {
+      // Text indented past column 16, or a line with no code: more of the line above.
+      const variant = last!.variants.at(-1)!;
+      variant.text = add(variant.text, said, ' ');
+      // The same routine can be named again on the next line.
+      if (!variant.setBy.split(/,\s*/).includes(setBy)) variant.setBy = add(variant.setBy, setBy, variant.setBy.endsWith(',') ? ' ' : ', ');
+    }
+  }
+  return found;
+}
+
+/** Use this program's verb and noun names and alarm codes from now on. */
+export function setProgramLists(listing: string | undefined, computer: string): void {
   ({ verbs, nouns } = listing ? parseVerbsAndNouns(listing) : { verbs: new Map(), nouns: new Map() });
+  alarms = listing ? parseAlarms(listing) : new Map();
   listName = computer;
+}
+
+/** The loaded program's alarm codes, in order. */
+export const alarmList = (): Alarm[] => [...alarms.values()];
+
+/** The name of the loaded program, as the lists say whose they are. */
+export const programName = () => listName;
+
+const sentence = (s: string) => (/\.\)?$/.test(s) ? s : `${s}.`);
+
+/** One line of an alarm, in words: what it means, what sets it, and what the computer does. */
+export const alarmLine = (v: AlarmVariant) => `${sentence(v.text)}${v.setBy ? ` Set by ${sentence(v.setBy)}` : ''} ${KIND_TEXT[v.kind]}`;
+
+/**
+ * What an alarm code means, or undefined when the list does not have it.
+ * A leading 4 to 7 is FAILREG's bit 15: more alarms came than its three words hold.
+ */
+export function describeAlarm(digits: string): string | undefined {
+  let code = digits.padStart(5, '0');
+  const overflow = code.length === 5 && code[0] >= '4' && code[0] <= '7';
+  if (overflow) code = `${Number(code[0]) - 4}${code.slice(1)}`;
+  const alarm = alarms.get(code);
+  if (!alarm) return undefined;
+  return [
+    `Alarm ${code}, from ${listName}’s alarm list:`,
+    ...alarm.variants.map(alarmLine),
+    alarm.note && sentence(alarm.note),
+    overflow ? `The leading ${digits[0]} means more alarms came than the computer has room for; this is the latest.` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 /** What a short form or a verb, noun or program number means, or undefined. */
 export function describe(term: string): string | undefined {
+  const alarm = /^alarms? (\d{4,5})$/i.exec(term);
+  if (alarm) return describeAlarm(alarm[1]);
   const code = /^(V|VERB |N|NOUN |P)(\d\d)$/.exec(term);
   if (code) {
     const [, kind, n] = code;
@@ -149,7 +268,7 @@ const termPattern = Object.keys(TERMS)
   .sort((a, b) => b.length - a.length)
   .map((t) => t.replace(/[/]/g, '\\$&'))
   .join('|');
-const PATTERN = new RegExp(`(?<![\\w-])(${termPattern}|VERB \\d\\d|NOUN \\d\\d|[VNP]\\d\\d)(?![\\w-])`, 'g');
+const PATTERN = new RegExp(`(?<![\\w-])(${termPattern}|[Aa]larms? \\d{4,5}|VERB \\d\\d|NOUN \\d\\d|[VNP]\\d\\d)(?![\\w-])`, 'g');
 
 /** Plain text as HTML, with the first use of each known short form wrapped in an <abbr>. */
 export function explain(text: string): string {
@@ -158,7 +277,7 @@ export function explain(text: string): string {
   let at = 0;
   for (const m of text.matchAll(PATTERN)) {
     const term = m[1];
-    const key = term.replace(/^VERB /, 'V').replace(/^NOUN /, 'N');
+    const key = term.replace(/^VERB /, 'V').replace(/^NOUN /, 'N').replace(/^alarms? 0*/i, 'alarm ');
     out += escapeHtml(text.slice(at, m.index));
     out += seen.has(key) ? escapeHtml(term) : abbr(term);
     seen.add(key);

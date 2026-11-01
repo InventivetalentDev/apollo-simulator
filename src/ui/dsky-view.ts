@@ -2,7 +2,7 @@
 // display, and the 19-key keyboard.
 
 import type { DskyKey, DskyLamps, DskyState } from '../agc/dsky.ts';
-import { describe, DSKY_TITLES, escapeHtml } from './glossary.ts';
+import { describe, describeAlarm, DSKY_TITLES, escapeHtml, programName } from './glossary.ts';
 
 const SEGMENTS: Record<string, string> = {
   a: '6.5,4 9,1.5 23,1.5 25.5,4 23,6.5 9,6.5',
@@ -132,6 +132,7 @@ export class DskyView {
   private lampEls = new Map<string, HTMLElement>();
   private compActy!: HTMLElement;
   private vnBlock!: HTMLElement;
+  private registers: HTMLElement[] = [];
   private last = '';
 
   constructor(parent: HTMLElement, handlers: DskyHandlers) {
@@ -146,6 +147,7 @@ export class DskyView {
     for (const el of this.el.querySelectorAll<HTMLElement>('[data-lamp]')) this.lampEls.set(el.dataset.lamp!, el);
     this.compActy = this.el.querySelector('.comp-acty')!;
     this.vnBlock = this.el.querySelector('.vn')!;
+    this.registers = [...this.el.querySelectorAll<HTMLElement>('.register')];
 
     for (const btn of this.el.querySelectorAll<HTMLButtonElement>('button[data-key]')) {
       const key = btn.dataset.key as DskyKey;
@@ -207,6 +209,13 @@ export class DskyView {
       this.setDigits(`r${i + 1}`, r.slice(1));
     });
     this.vnBlock.classList.toggle('blank', state.vnBlank);
+    // VERB 05 NOUN 09 shows the alarm codes in R1 to R3: hover over one for its meaning.
+    const alarms = state.verb === '05' && state.noun === '09';
+    this.registers.forEach((el, i) => {
+      const code = state.r[i].slice(1).trim();
+      if (!alarms || !/^\d{5}$/.test(code)) el.removeAttribute('title');
+      else el.title = code === '00000' ? 'No alarm.' : (describeAlarm(code) ?? `Alarm ${code} is not in ${programName()}’s alarm list.`);
+    });
     this.compActy.classList.toggle('on', state.lamps.compActy);
     for (const [id, el] of this.lampEls) el.classList.toggle('on', !!state.lamps[id as keyof DskyLamps]);
   }
