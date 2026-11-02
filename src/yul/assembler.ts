@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Parts of this file are translated from yaYUL, the Virtual AGC project's
+// assembler: Copyright 2003-2021 Ronald S. Burkey <info@sandroid.org>,
+// GPL version 2 or later. Translated to TypeScript for this project in 2026.
+// See LICENSE.
+//
 // A TypeScript re-implementation of the parts of the YUL assembler needed to
 // turn the original Apollo Guidance Computer (Block II) source code into a
 // core-rope image.  It follows the behaviour of Ron Burkey's yaYUL (the

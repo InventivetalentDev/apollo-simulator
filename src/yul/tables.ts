@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Parts of this file are translated from yaYUL, the Virtual AGC project's
+// assembler: Copyright 2003-2021 Ronald S. Burkey <info@sandroid.org>,
+// GPL version 2 or later. Translated to TypeScript for this project in 2026.
+// See LICENSE.
+//
 // Opcode tables for the Block II AGC assembly language, as accepted by the
 // MIT Instrumentation Lab's YUL assembler (and its modern re-creation, yaYUL).
 // Values are octal, exactly as they appear in the original documentation.
