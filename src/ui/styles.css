@@ -1204,6 +1204,14 @@ abbr[title] {
   pointer-events: none;
   text-shadow: 0 1px 3px rgb(0 0 0 / 0.85);
 }
+/* Without a 3D view the note says why, in readable text, and a lost view's blank canvas goes */
+.view3d.no-3d canvas {
+  visibility: hidden;
+}
+.view3d.no-3d .view3d-hint {
+  font-size: 14px;
+  color: var(--text);
+}
 /* Instruments laid over the view: the panel's paint behind them, so the stars do not run through the figures */
 .stage > .fdai,
 .stage > .descent {

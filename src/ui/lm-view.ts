@@ -229,6 +229,23 @@ const unit = (a: Vec3): Vec3 => {
   return [a[0] / n, a[1] / n, a[2] / n];
 };
 
+/** Why the 3D view could not start: which WebGL the browser offers, and its own reason. */
+function noViewMessage(detail: string): string {
+  const offers = (name: string) => {
+    try {
+      return !!document.createElement('canvas').getContext(name);
+    } catch {
+      return false;
+    }
+  };
+  const why = offers('webgl2')
+    ? 'No 3D view: it could not start, although this browser offers WebGL 2.'
+    : offers('webgl')
+      ? 'No 3D view: it needs WebGL 2, and this browser offers only WebGL 1.'
+      : 'No 3D view: it needs WebGL 2, which this browser does not offer right now.';
+  return `${why} Everything else works. Reason given: ${detail.replace(/^THREE\.WebGLRenderer: /, '') || 'none'}`;
+}
+
 export class LmView {
   private lm: LunarModule | null = null;
   private readonly renderer: THREE.WebGLRenderer | null = null;
@@ -250,14 +267,34 @@ export class LmView {
     host.innerHTML = `<h2 class="view3d-title" id="view3d-title">3D view</h2>
       <p class="view3d-hint">Drag to look around, scroll or pinch to zoom</p>`;
     const hint = host.querySelector('.view3d-hint')!;
+    // Phones and tablets get a lighter scene: fewer pixels, no multisampling and a
+    // smaller shadow map, about a quarter of the graphics work. Phone graphics chips
+    // that ran out of headroom reset, and the browser then refused this page WebGL.
+    const touch = matchMedia('(pointer: coarse)').matches;
+    // three.js only logs the browser's reason for refusing a context; on a phone nobody
+    // sees the console, so the reason goes on the page.
+    let reason = '';
+    const create = (antialias: boolean) => {
+      const canvas = document.createElement('canvas');
+      canvas.addEventListener('webglcontextcreationerror', (e) => (reason ||= (e as WebGLContextEvent).statusMessage));
+      return new THREE.WebGLRenderer({ canvas, antialias });
+    };
     try {
-      this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    } catch {
-      hint.textContent = 'The 3D view needs WebGL, which this browser does not offer.';
-      return;
+      this.renderer = create(!touch);
+    } catch (first) {
+      // Some phones refuse an antialiased context but give a plain one.
+      try {
+        this.renderer = create(false);
+        console.warn('The 3D view started without antialiasing', first);
+      } catch {
+        console.error('The 3D view could not start', first);
+        host.classList.add('no-3d');
+        hint.textContent = noViewMessage(reason || (first instanceof Error ? first.message : String(first)));
+        return;
+      }
     }
     const renderer = this.renderer;
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(devicePixelRatio, touch ? 1.5 : 2));
     renderer.setClearColor('#05070a');
     renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.shadowMap.enabled = true;
@@ -265,6 +302,20 @@ export class LmView {
     renderer.domElement.setAttribute('role', 'img');
     renderer.domElement.setAttribute('aria-label', 'The Lunar Module at its current attitude, with its RCS jets');
     host.insertBefore(renderer.domElement, hint);
+    // If the graphics chip resets, say so instead of leaving a blank box; three.js asks
+    // the browser to give the context back, and then the view carries on.
+    let usage = '';
+    renderer.domElement.addEventListener('webglcontextlost', () => {
+      console.error('The 3D view lost its WebGL context');
+      usage ||= hint.textContent ?? '';
+      host.classList.add('no-3d');
+      hint.textContent = 'The 3D view stopped: the browser reset its graphics. Everything else works. Reload the page to bring the view back.';
+    });
+    renderer.domElement.addEventListener('webglcontextrestored', () => {
+      host.classList.remove('no-3d');
+      hint.textContent = usage;
+      this.scene.environment = moonshine(renderer);
+    });
     new ResizeObserver(([entry]) => {
       const { width: w, height: h } = entry.contentRect;
       if (!w || !h) return;
@@ -282,7 +333,7 @@ export class LmView {
     this.controls.maxDistance = 40;
     // On a touch screen the view is at the top of the page: a swipe up or down scrolls the
     // page, a swipe sideways turns the view, and a pinch zooms it.
-    if (window.matchMedia('(pointer: coarse)').matches) {
+    if (touch) {
       renderer.domElement.style.touchAction = 'pan-y';
       hint.textContent = 'Swipe sideways to look around, pinch to zoom';
     }
@@ -294,7 +345,7 @@ export class LmView {
     const sun = new THREE.DirectionalLight(0xfff4e6, 3.2);
     sun.position.copy(SUN).multiplyScalar(25);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.setScalar(touch ? 1024 : 2048);
     Object.assign(sun.shadow.camera, { left: -6.5, right: 6.5, top: 6.5, bottom: -6.5, near: 5, far: 45 });
     sun.shadow.bias = -0.0003;
     sun.shadow.normalBias = 0.02;
