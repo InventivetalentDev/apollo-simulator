@@ -49,9 +49,10 @@ The site is a Cloudflare Worker that serves the static files in `dist/`
 Click the keys or type on your keyboard: digits, `V` (VERB), `N` (NOUN),
 `Enter` (ENTR), `C` (CLR), `P` (PRO), `K` (KEY REL), `R` (RSET). Hover
 over a key, a lamp, or a dotted-underlined short form such as T4RUPT or V99
-to see what it means; verb and noun names come from the loaded program's
-own lists. So do the alarm codes: when the PROG lamp lights, key VERB 05
-NOUN 09 and hover over a code on the DSKY, or search the Alarm codes tab of
+to see what it means; on a touch screen, tap a lamp or a short form instead.
+Verb and noun names come from the loaded program's own lists. So do the
+alarm codes: when the PROG lamp lights, key VERB 05 NOUN 09 and hover over
+or tap a code on the DSKY, or search the Alarm codes tab of
 the Guide. The "Try it" chips under the DSKY key the most useful commands in
 one click, and the Guide beside them has every ready-made sequence:
 

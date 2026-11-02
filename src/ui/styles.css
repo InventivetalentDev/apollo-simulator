@@ -352,6 +352,43 @@ abbr[title] {
 .status-lamp[title] {
   cursor: help;
 }
+/* On a touch screen, the same meaning in a bubble after a tap (touch-tips.ts). A tap on a
+   control does what the control does, so short forms inside controls lose the underline there. */
+@media (hover: none) {
+  :is(button, a, label, summary, [role='button'], [role='radio'], [role='tab']) abbr[title] {
+    text-decoration: none;
+  }
+}
+.touch-tip {
+  position: fixed;
+  inset: auto;
+  z-index: 100;
+  margin: 0;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 8px 11px;
+  border: 1px solid var(--scribe);
+  border-radius: 3px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font: 400 14px/1.45 var(--font-body);
+  text-align: left;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  transition:
+    opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    translate 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.touch-tip[hidden] {
+  display: none;
+}
+@starting-style {
+  .touch-tip {
+    opacity: 0;
+    translate: 0 4px;
+  }
+  .touch-tip[data-side='above'] {
+    translate: 0 -4px;
+  }
+}
 
 /* ---- DSKY */
 .dsky {
@@ -1764,7 +1801,8 @@ abbr[title] {
   .key.cue::after {
     animation: none;
   }
-  .guide {
+  .guide,
+  .touch-tip {
     transition: none;
   }
 }

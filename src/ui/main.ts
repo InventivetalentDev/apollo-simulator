@@ -12,6 +12,7 @@ import type { LmView } from './lm-view.ts';
 import { Machine } from './machine.ts';
 import { abbr, alarmLine, alarmList, escapeHtml, explain, explainIn, programName, setProgramLists } from './glossary.ts';
 import { formatAddress, ropeIndexOf, SourceView, type SourceLinker } from './source-view.ts';
+import { setUpTouchTips } from './touch-tips.ts';
 
 interface LoadedProgram {
   info: ProgramInfo;
@@ -750,8 +751,9 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
-// Short forms in the page's fixed text: their meaning shows on hover.
+// Short forms in the page's fixed text: their meaning shows on hover, or on a tap on a touch screen.
 for (const el of document.querySelectorAll<HTMLElement>('[data-abbr]')) el.innerHTML = abbr(el.textContent!.trim());
+setUpTouchTips($('.app'));
 explainIn($('#gpanel-about'));
 explainIn($('#gpanel-try .hint'));
 $('#intro').append($('#gpanel-about ul').cloneNode(true));

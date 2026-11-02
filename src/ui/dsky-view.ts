@@ -209,7 +209,7 @@ export class DskyView {
       this.setDigits(`r${i + 1}`, r.slice(1));
     });
     this.vnBlock.classList.toggle('blank', state.vnBlank);
-    // VERB 05 NOUN 09 shows the alarm codes in R1 to R3: hover over one for its meaning.
+    // VERB 05 NOUN 09 shows the alarm codes in R1 to R3: hover over or tap one for its meaning.
     const alarms = state.verb === '05' && state.noun === '09';
     this.registers.forEach((el, i) => {
       const code = state.r[i].slice(1).trim();
