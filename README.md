@@ -234,9 +234,11 @@ marker. Each line number, the file name and the "Running" location link to the
 same line in chrislgarry/Apollo-11 on GitHub, at the commit checked out in
 `vendor/Apollo-11`, so the line numbers always match.
 
-Both pieces were written for this project. The Virtual AGC project's yaYUL
-and yaAGC (GPL) were the reference for the exact behaviour of the assembler
-and of the hardware. No code was copied from them.
+The assembler and the emulator are partly translated from the
+[Virtual AGC](https://www.ibiblio.org/apollo/) project's yaYUL and yaAGC by
+Ron Burkey: parts of `src/yul/assembler.ts`, `src/yul/tables.ts` and
+`src/agc/cpu.ts` port their C code to TypeScript. The spacecraft (`src/sim`)
+and the web page (`src/ui`) were written for this project.
 
 ## Notes on the upstream source
 
@@ -269,3 +271,14 @@ or tumbles in gimbal lock. Possible next steps:
 
 - the rendezvous radar's cycle stealing, which caused the 1201 and 1202 alarms
 - decoding the digital downlink (telemetry) the software sends 50 times a second
+
+## License
+
+GNU General Public License, version 2 or (at your option) any later version.
+See [LICENSE](LICENSE).
+
+Parts of the assembler and the emulator are translated from yaYUL and yaAGC
+(Copyright Ronald S. Burkey, GPL version 2 or later), so the whole project
+uses the same license. The Apollo 11 source in `vendor/Apollo-11` and the
+octal listings in `test/fixtures` are public domain. three.js is under the
+MIT license.

@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Apollo 11 guidance computer simulator for the web, running the original Comanche055/Luminary099 source code.",
+  "license": "GPL-2.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite",

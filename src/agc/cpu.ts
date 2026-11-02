@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Parts of this file are translated from yaAGC, the Virtual AGC project's
+// emulator: Copyright 2003-2021 Ronald S. Burkey <info@sandroid.org>,
+// GPL version 2 or later. Translated to TypeScript for this project in 2026.
+// See LICENSE.
+//
 // An emulator for the Block II Apollo Guidance Computer.
 //
 // The model follows the hardware closely enough to run the unmodified flight
